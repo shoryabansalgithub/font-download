@@ -33,7 +33,6 @@ export default function Home() {
         throw new Error(data.error || 'Failed to extract fonts');
       }
 
-      // Sort fonts: normal style first, then regular weight (400) preferred
       const sortedFonts = [...data.fonts].sort((a: FontInfo, b: FontInfo) => {
         const aIsItalic = a.style?.toLowerCase().includes('italic') ? 1 : 0;
         const bIsItalic = b.style?.toLowerCase().includes('italic') ? 1 : 0;
@@ -60,80 +59,106 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-white relative">
-      {/* Background Pattern */}
-      <div className="fixed inset-0 h-full w-full bg-white pointer-events-none">
-        <div className="absolute h-full w-full bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
-      </div>
+    <main className="min-h-screen bg-grid relative">
+      {/* Top fade mask over grid */}
+      <div className="fixed inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(250,250,250,0.0) 0%, transparent 100%)'
+      }} />
+
+      {/* Top navigation bar */}
+      <header className="relative z-20 border-b border-zinc-200/60 bg-white/70 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-md bg-zinc-950 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h7" />
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-zinc-800 tracking-tight">Font Analyzer</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-zinc-400 px-2 py-1 bg-zinc-50 border border-zinc-200 rounded-lg font-medium">
+              WOFF · WOFF2 · TTF · OTF
+            </span>
+          </div>
+        </div>
+      </header>
 
       {/* Content */}
       <div className="relative z-10">
-        {/* Hero Section */}
+        {/* Hero */}
         <HeroSection />
 
-        {/* Search Input */}
-        <div className="mt-10">
+        {/* Search */}
+        <div className="mt-8">
           <SearchInput onSearch={handleSearch} loading={loading} />
         </div>
 
-        {/* Results Section */}
-        <section className="max-w-6xl mx-auto px-6 py-16">
-          {/* Error Message */}
+        {/* Results */}
+        <section className="max-w-6xl mx-auto px-6 py-14">
+          {/* Error */}
           <AnimatePresence mode="wait">
             {error && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                className="mb-8 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-center text-sm"
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="mb-8 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm text-center"
               >
                 {error}
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Results Header */}
+          {/* Results header + preview input */}
           <AnimatePresence mode="wait">
             {fonts.length > 0 && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                className="mb-8"
+                transition={{ duration: 0.3 }}
+                className="mb-6"
               >
-                <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
-                  Found {fonts.length} {fonts.length === 1 ? 'font' : 'fonts'}
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                      {fonts.length} {fonts.length === 1 ? 'font' : 'fonts'} found
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-zinc-300" />
+                    <span className="text-xs text-zinc-400">sorted alphabetically</span>
+                  </div>
+                </div>
+
+                {/* Custom preview text */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
+                    <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={previewText}
+                    onChange={(e) => setPreviewText(e.target.value)}
+                    placeholder="Custom preview text…"
+                    className="w-full pl-9 pr-10 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-all duration-150 shadow-sm"
+                  />
+                  {previewText && (
+                    <button
+                      onClick={() => setPreviewText('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-0.5 rounded"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Custom Preview Text */}
-          {fonts.length > 0 && (
-            <div className="mb-6">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={previewText}
-                  onChange={(e) => setPreviewText(e.target.value)}
-                  placeholder="Type custom preview text…"
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-150"
-                />
-                {previewText && (
-                  <button
-                    onClick={() => setPreviewText('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Font Grid */}
           <AnimatePresence mode="wait">
@@ -149,53 +174,62 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          {/* Empty State */}
+          {/* Empty state */}
           <AnimatePresence mode="wait">
             {searched && !loading && fonts.length === 0 && !error && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                className="text-center py-16"
+                transition={{ duration: 0.3 }}
+                className="text-center py-20"
               >
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-zinc-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <p className="text-gray-500">No fonts found on this website</p>
+                <p className="text-sm text-zinc-500">No fonts found on this website</p>
+                <p className="text-xs text-zinc-400 mt-1">Try a different URL</p>
               </motion.div>
             )}
           </AnimatePresence>
         </section>
 
         {/* Footer */}
-        <footer className="py-16 border-t border-gray-200 mt-20">
-          <div className="max-w-5xl mx-auto px-6">
-            <p className="text-base font-medium text-gray-400 uppercase tracking-wider mb-6">Supports WOFF, WOFF2, TTF, and OTF formats</p>
-            
-            <div className="space-y-5 text-lg text-gray-500 leading-relaxed">
-              <h3 className="text-xl font-bold text-gray-700 uppercase tracking-wide">Disclaimer</h3>
-              
-              <p className="text-lg">
-                Analyze Any Font is a developer utility designed to help designers and developers inspect and identify typography used on the web for testing and research purposes.
-              </p>
+        <footer className="border-t border-zinc-200/80 mt-8 bg-white/50">
+          <div className="max-w-5xl mx-auto px-6 py-12">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-8">
+              {/* Brand */}
+              <div className="shrink-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-5 h-5 rounded bg-zinc-950 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h7" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-semibold text-zinc-800">Font Analyzer</span>
+                </div>
+                <p className="text-xs text-zinc-400">&copy; {new Date().getFullYear()} · Built for designers</p>
+              </div>
 
-              <p className="text-lg">
-                <span className="font-semibold text-gray-700">Respect Licenses:</span> Many web fonts are licensed software. Identifying a font does not grant you a license to use it. You are responsible for ensuring you have the appropriate rights or licenses for any font you reuse.
-              </p>
-
-              <p className="text-lg">
-                <span className="font-semibold text-gray-700">No Circumvention:</span> This tool only detects styles that are already sent to your browser for rendering. It does not bypass DRM, decrypt secured files, or access private directories.
-              </p>
-
-              <p className="text-lg">
-                <span className="font-semibold text-gray-700">User Responsibility:</span> The author of this tool assumes no liability for the misuse of information provided. Please support type foundries by purchasing proper licenses for your projects.
-              </p>
+              {/* Disclaimer */}
+              <div className="flex-1 space-y-3 text-xs text-zinc-500 leading-relaxed border-l border-zinc-200 pl-8">
+                <p className="font-medium text-zinc-600 uppercase tracking-wider text-[11px]">Disclaimer</p>
+                <p>
+                  A developer utility to inspect and identify typography used on the web for testing and research.
+                </p>
+                <p>
+                  <span className="font-medium text-zinc-700">Respect licenses:</span> Identifying a font does not grant you a license to use it. Ensure you have the appropriate rights for any font you reuse.
+                </p>
+                <p>
+                  <span className="font-medium text-zinc-700">No circumvention:</span> This tool only detects styles already sent to your browser. It does not bypass DRM or access private files.
+                </p>
+                <p>
+                  <span className="font-medium text-zinc-700">User responsibility:</span> Please support type foundries by purchasing proper licenses for your projects.
+                </p>
+              </div>
             </div>
-
-            <p className="mt-10 text-base text-gray-400">&copy; {new Date().getFullYear()} Analyze Any Font. Built for the design community.</p>
           </div>
         </footer>
       </div>
