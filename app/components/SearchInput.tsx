@@ -69,15 +69,7 @@ export default function SearchInput({ onSearch, loading }: SearchInputProps) {
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
                         placeholder="Enter website URL"
-                        className="
-              flex-1 
-              py-4 px-2 
-              text-base text-gray-900 
-              placeholder:text-gray-400
-              bg-transparent 
-              outline-none
-              min-w-0
-            "
+                        className="flex-1 py-4 px-2 text-base text-gray-900 placeholder:text-gray-400 bg-transparent outline-none min-w-0"
                         style={{ fontSize: '16px' }} /* Prevent iOS zoom */
                     />
 
