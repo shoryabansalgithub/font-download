@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
     }
 
-    let realFonts = await extractFontsWithPlaywright(targetUrl.href);
+    const realFonts = await extractFontsWithPlaywright(targetUrl.href);
 
     const response = await fetch(targetUrl.href, {
       headers: {

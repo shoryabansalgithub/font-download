@@ -93,7 +93,7 @@ export default function FontStealer() {
             {/* Search Form */}
             <form onSubmit={handleSubmit} className="mb-12">
                 <div className="relative group">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition duration-500"></div>
+                    <div className="absolute -inset-1 bg-linear-to-r from-purple-600 via-pink-500 to-orange-400 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition duration-500"></div>
                     <div className="relative flex items-center bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
                         <div className="pl-5 pr-3">
                             <svg className="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,7 +110,7 @@ export default function FontStealer() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="m-2 px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold rounded-lg hover:from-purple-500 hover:to-pink-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="m-2 px-8 py-3 bg-linear-to-r from-purple-600 to-pink-500 text-white font-semibold rounded-lg hover:from-purple-500 hover:to-pink-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {loading ? (
                                 <>
@@ -145,7 +145,7 @@ export default function FontStealer() {
                 <div className="animate-fade-in">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-2xl font-bold text-white">
-                            Found <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">{fonts.length}</span> fonts
+                            Found <span className="text-transparent bg-clip-text bg-linear-to-r from-purple-400 to-pink-400">{fonts.length}</span> fonts
                         </h2>
                     </div>
                     <FontGrid fonts={fonts} />
