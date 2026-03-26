@@ -114,21 +114,6 @@ export default function FontCard({ font, index, previewText }: FontCardProps) {
               )}
             </div>
           </div>
-          
-          {/* Subtle Download Icon button conceptually added here instead of a format badge */}
-          <a
-            href={displayUrl}
-            download={`${font.family.replace(/\s+/g, '-')}-${font.weight || '400'}.${font.format.toLowerCase()}`}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/60 text-slate-400 opacity-0 shadow-sm transition-all hover:bg-black hover:text-white group-hover:opacity-100"
-            title="Download original file"
-            onClick={() => {
-              if (isDataUrl) return; // For data urls, right click save is preferred or a more complex decode
-            }}
-          >
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </a>
         </header>
 
         {/* Specimen Showcase */}
