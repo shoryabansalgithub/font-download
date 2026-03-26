@@ -36,7 +36,7 @@
 @theme inline {
   --color-background: var(--bg-canvas);
   --color-foreground: var(--text-1);
-  --font-sans: var(--font-manrope), system-ui, -apple-system, sans-serif;
+  --font-sans: var(--active-font, var(--font-manrope)), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 

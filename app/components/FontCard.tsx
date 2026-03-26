@@ -80,105 +80,130 @@ export default function FontCard({ font, index, previewText }: FontCardProps) {
     }
   };
 
-  const formatBadgeStyle = (format: string): string => {
-    const styles: Record<string, string> = {
-      WOFF2: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
-      WOFF: 'bg-sky-50 text-sky-700 border border-sky-100',
-      TRUETYPE: 'bg-violet-50 text-violet-700 border border-violet-100',
-      TTF: 'bg-violet-50 text-violet-700 border border-violet-100',
-      OPENTYPE: 'bg-amber-50 text-amber-700 border border-amber-100',
-      OTF: 'bg-amber-50 text-amber-700 border border-amber-100',
-      EOT: 'bg-rose-50 text-rose-700 border border-rose-100',
-    };
-
-    return styles[format.toUpperCase()] || 'bg-slate-100 text-slate-700 border border-slate-200';
-  };
-
   return (
     <motion.article
-      initial={{ opacity: 0, y: 18 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: 'easeOut', delay: index * 0.04 }}
-      className="panel overflow-hidden"
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: index * 0.05 }}
+      whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+      className="group relative flex min-h-[320px] flex-col overflow-hidden rounded-[2rem] border border-white/60 bg-white/40 p-6 backdrop-blur-xl shadow-sm transition-all hover:bg-white/50 hover:shadow-md"
     >
-      <div className="p-5">
-        <header className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-semibold text-foreground">{font.family}</h3>
-            <p className="mt-0.5 truncate text-xs text-(--text-3)">{font.name}</p>
+      <div className="flex flex-col h-full flex-1">
+        
+        {/* Top Minimal Info */}
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <h3 className="text-xl font-medium tracking-tight text-slate-900 group-hover:text-blue-900 transition-colors">
+              {font.family}
+            </h3>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-400">
+                {font.format.replace('TRUETYPE', 'TTF').replace('OPENTYPE', 'OTF')}
+              </span>
+              <span className="size-1 rounded-full bg-slate-300"></span>
+              <span className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-400">
+                {font.weight || '400'}
+              </span>
+              {(font.style && font.style !== 'normal') && (
+                <>
+                  <span className="size-1 rounded-full bg-slate-300"></span>
+                  <span className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-400">
+                    {font.style}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-          <span className={`rounded-md px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.06em] ${formatBadgeStyle(font.format)}`}>
-            {font.format}
-          </span>
+          
+          {/* Subtle Download Icon button conceptually added here instead of a format badge */}
+          <a
+            href={displayUrl}
+            download={`${font.family.replace(/\s+/g, '-')}-${font.weight || '400'}.${font.format.toLowerCase()}`}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/60 text-slate-400 opacity-0 shadow-sm transition-all hover:bg-black hover:text-white group-hover:opacity-100"
+            title="Download original file"
+            onClick={() => {
+              if (isDataUrl) return; // For data urls, right click save is preferred or a more complex decode
+            }}
+          >
+            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </a>
         </header>
 
-        <section className="mb-4 rounded-xl border border-(--line-soft) bg-(--surface-1) p-4">
+        {/* Specimen Showcase */}
+        <section className="flex-1 flex flex-col justify-center py-6 min-h-[140px] relative">
           {fontLoaded ? (
             <p
-              className="text-center text-[1.55rem] leading-relaxed text-foreground"
+              className="text-[2.25rem] leading-[1.1] tracking-tight text-slate-800 break-words line-clamp-3"
               style={{
                 fontFamily: `'PreviewFont${index}', sans-serif`,
                 fontStyle: font.style || 'normal',
                 fontWeight: font.weight || 'normal',
               }}
             >
-              {previewText || 'The quick brown fox jumps over the lazy dog'}
+              {previewText || 'Aa'}
             </p>
           ) : (
-            <div className="space-y-2">
-              <div className="h-4 w-full animate-pulse rounded bg-slate-200" />
-              <div className="h-4 w-10/12 animate-pulse rounded bg-slate-200" />
+            <div className="space-y-3 w-full">
+              <div className="h-6 w-3/4 animate-pulse rounded-md bg-white/60"></div>
+              <div className="h-6 w-1/2 animate-pulse rounded-md bg-white/60"></div>
             </div>
           )}
         </section>
 
-        <div className="mb-4 flex items-center gap-3 text-xs font-medium text-(--text-2)">
-          <span className="rounded-md border border-(--line-soft) bg-(--surface-1) px-2 py-1 numeric">Weight {font.weight || '400'}</span>
-          <span className="rounded-md border border-(--line-soft) bg-(--surface-1) px-2 py-1">Style {(font.style || 'normal').toLowerCase()}</span>
+        {/* Action Button */}
+        <div className="mt-auto">
+          <button
+            type="button"
+            onClick={findAlternatives}
+            disabled={loadingAlternatives}
+            className="w-full group/btn flex items-center justify-between rounded-xl bg-white/80 p-3 text-sm font-medium text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-900 group-hover:border-white/80 border border-white/40"
+          >
+            <span className="flex items-center gap-2">
+              <svg className="size-4 text-slate-400 group-hover/btn:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              {loadingAlternatives ? 'Analyzing structure...' : showAlternatives ? 'Hide matches' : 'Find similar free fonts'}
+            </span>
+            {alternatives.length > 0 && !loadingAlternatives && !showAlternatives && (
+              <span className="flex size-5 items-center justify-center rounded-full bg-blue-100 text-[0.65rem] font-bold text-blue-600">
+                {alternatives.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        <motion.button
-          type="button"
-          onClick={findAlternatives}
-          whileTap={{ scale: 0.97 }}
-          disabled={loadingAlternatives}
-          className={`w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-colors duration-150 ${
-            loadingAlternatives
-              ? 'cursor-not-allowed bg-slate-100 text-slate-400'
-              : 'bg-(--brand-soft) text-(--brand-2) hover:bg-[#dce9ff]'
-          }`}
-        >
-          {loadingAlternatives ? 'Matching alternatives...' : alternatives.length > 0 ? (showAlternatives ? 'Hide alternatives' : 'Show alternatives') : 'Find free alternatives'}
-        </motion.button>
-
+        {/* Alternatives Dropdown */}
         <AnimatePresence initial={false}>
           {showAlternatives && alternatives.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="mt-4 overflow-hidden border-t border-(--line-soft) pt-4"
+              initial={{ opacity: 0, height: 0, marginTop: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+              exit={{ opacity: 0, height: 0, marginTop: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
             >
-              <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Free alternatives</p>
-              <div className="space-y-2">
+              <div className="space-y-1.5 rounded-xl bg-white/60 p-2 border border-white/60">
                 {alternatives.map((alt, altIndex) => (
                   <a
                     key={`${alt.family}-${altIndex}`}
                     href={alt.downloadUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-lg border border-(--line-soft) bg-(--surface-1) px-3 py-2.5 transition-colors hover:bg-(--surface-2)"
+                    className="flex flex-col rounded-lg bg-white/80 p-2.5 transition-colors hover:bg-white border border-transparent hover:border-blue-100 hover:shadow-sm"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-foreground">{alt.family}</p>
-                      {alt.similarity != null && alt.similarity > 0 && (
-                        <span className="numeric rounded-md bg-slate-100 px-1.5 py-0.5 text-[0.68rem] font-semibold text-slate-600">
-                          {alt.similarity}%
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-slate-800">{alt.family}</span>
+                      {alt.similarity && (
+                        <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
+                          {alt.similarity}% match
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 truncate text-xs text-(--text-3)">{alt.reason || alt.category || 'Google Fonts alternative'}</p>
+                    <span className="mt-0.5 text-[0.65rem] text-slate-500 uppercase tracking-wide">
+                      {alt.reason || 'Google Fonts'}
+                    </span>
                   </a>
                 ))}
               </div>
