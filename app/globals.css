@@ -127,3 +127,56 @@ textarea,
 select {
   font-size: 16px;
 }
+
+/* ── Scan results screen (second screen) ─────────────────────────── */
+
+.scan-page .scan-focusable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(29, 98, 221, 0.45);
+}
+
+@keyframes scan-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes scan-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes scan-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.scan-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.55) 0%,
+    rgba(226, 232, 240, 0.95) 45%,
+    rgba(226, 232, 240, 0.55) 90%
+  );
+  background-size: 200% 100%;
+  animation: scan-shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-shimmer {
+    animation: none;
+    background: rgba(226, 232, 240, 0.7);
+  }
+}

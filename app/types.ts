@@ -9,6 +9,9 @@ export interface FontInfo {
     alternatives?: FontAlternative[];
 }
 
+/** Scan results extract lifecycle (UI state machine). */
+export type ExtractStatus = 'loading' | 'success' | 'empty' | 'error';
+
 export interface FontAlternative {
     family: string;
     category?: string;
