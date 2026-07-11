@@ -1,214 +1,582 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { FontInfo } from '../types';
 import FontGrid from '../components/FontGrid';
+
+type ExtractStatus = 'loading' | 'success' | 'empty' | 'error';
+
+const SPECIMEN_MAX = 120;
+const DEFAULT_SPECIMEN = 'Sphinx of black quartz, judge my vow';
+
+function normalizeScanUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function sortFonts(fonts: FontInfo[]): FontInfo[] {
+  return [...fonts].sort((a, b) => {
+    const familyCmp = a.family.localeCompare(b.family);
+    if (familyCmp !== 0) return familyCmp;
+
+    const aWeight = parseInt(a.weight || '400', 10) || 400;
+    const bWeight = parseInt(b.weight || '400', 10) || 400;
+    if (aWeight !== bWeight) return aWeight - bWeight;
+
+    const aItalic = a.style?.toLowerCase().includes('italic') ? 1 : 0;
+    const bItalic = b.style?.toLowerCase().includes('italic') ? 1 : 0;
+    return aItalic - bItalic;
+  });
+}
+
+function normalizeFormatToken(format: string): string {
+  const key = format.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const map: Record<string, string> = {
+    woff2: 'WOFF2',
+    woff: 'WOFF',
+    ttf: 'TTF',
+    truetype: 'TTF',
+    otf: 'OTF',
+    opentype: 'OTF',
+    eot: 'EOT',
+    svg: 'SVG',
+  };
+  if (map[key]) return map[key];
+  return format.toUpperCase().slice(0, 10);
+}
+
+function humanizeExtractError(message: string, host: string): string {
+  if (!message) return 'Something went wrong during extraction.';
+  if (message === 'Invalid URL' || message === 'URL is required') {
+    return "That URL isn't valid. Check the address and try again.";
+  }
+  const fetchMatch = message.match(/^Failed to fetch website:\s*(.+)$/i);
+  if (fetchMatch) {
+    return `We couldn't reach the site (${fetchMatch[1]}).`;
+  }
+  if (/network|failed to fetch|load failed/i.test(message)) {
+    return 'Network error. Check your connection.';
+  }
+  if (message === 'Failed to extract fonts') {
+    return host
+      ? `Something went wrong extracting fonts from ${host}.`
+      : 'Something went wrong during extraction.';
+  }
+  return message;
+}
+
+function uniqueFormats(fonts: FontInfo[]): string[] {
+  const seen = new Set<string>();
+  for (const font of fonts) {
+    seen.add(normalizeFormatToken(font.format || ''));
+  }
+  return Array.from(seen).filter(Boolean);
+}
+
+function ScanShellChrome({
+  statusLabel,
+  statusKind,
+  targetHost,
+  fullUrl,
+  onBack,
+  reducedMotion,
+}: {
+  statusLabel: string;
+  statusKind: ExtractStatus;
+  targetHost: string;
+  fullUrl: string;
+  onBack: () => void;
+  reducedMotion: boolean | null;
+}) {
+  const pillStyles: Record<ExtractStatus, string> = {
+    loading: 'bg-[#fff7ed] border-[#fed7aa] text-[#c2410c]',
+    success: 'bg-[#ecfdf5] border-[#a7f3d0] text-[#15855f]',
+    empty: 'bg-[#fff7ed] border-[#fed7aa] text-[#c2410c]',
+    error: 'bg-[#fef2f2] border-[#fecaca] text-[#bf3f4a]',
+  };
+  const dotStyles: Record<ExtractStatus, string> = {
+    loading: 'bg-[#f59e0b]',
+    success: 'bg-[#10b981]',
+    empty: 'bg-[#f59e0b]',
+    error: 'bg-[#f43f5e]',
+  };
+
+  return (
+    <motion.nav
+      initial={reducedMotion ? false : { y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[rgba(215,226,241,0.7)] bg-[rgba(255,255,255,0.78)] px-6 backdrop-blur-[20px] md:px-10"
+    >
+      <button
+        type="button"
+        onClick={onBack}
+        className="scan-focusable group flex min-h-9 min-w-9 items-center gap-2 rounded-lg text-[13px] font-semibold text-[#3f536d] transition-colors duration-[120ms] hover:text-[#102035]"
+      >
+        <svg
+          className="size-4 shrink-0 transition-transform duration-[120ms] group-hover:-translate-x-[3px]"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+        </svg>
+        <span className="sm:hidden">Back</span>
+        <span className="hidden sm:inline">Back to scanner</span>
+      </button>
+
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <span
+          role="status"
+          aria-live="polite"
+          className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 pl-2 text-[11px] font-bold uppercase tracking-[0.08em] ${pillStyles[statusKind]}`}
+        >
+          <span className="relative flex size-2">
+            {statusKind === 'loading' && (
+              <span
+                className={`absolute inline-flex size-full rounded-full ${dotStyles.loading} opacity-75 motion-safe:animate-[scan-pulse_1.2s_ease-in-out_infinite]`}
+              />
+            )}
+            <span className={`relative inline-flex size-2 rounded-full ${dotStyles[statusKind]}`} />
+          </span>
+          {statusLabel}
+        </span>
+
+        {(targetHost || fullUrl) && (
+          <span
+            title={fullUrl || targetHost}
+            className="hidden max-w-[min(48vw,280px)] truncate rounded-lg border border-[#d7e2f1] bg-white px-2.5 py-1.5 font-mono text-[12px] font-medium text-[#102035] sm:inline-block"
+          >
+            {targetHost || fullUrl}
+          </span>
+        )}
+      </div>
+    </motion.nav>
+  );
+}
+
+function SpecimenControl({
+  value,
+  onChange,
+  toast,
+}: {
+  value: string;
+  onChange: (next: string, truncated: boolean) => void;
+  toast: string | null;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="flex w-full flex-col gap-1.5 md:w-auto md:min-w-[320px] md:max-w-[400px]">
+      <label
+        htmlFor="preview-text"
+        className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6b7f98]"
+      >
+        Specimen
+      </label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          id="preview-text"
+          type="text"
+          value={value}
+          maxLength={SPECIMEN_MAX}
+          onChange={(event) => {
+            const raw = event.target.value;
+            if (raw.length > SPECIMEN_MAX) {
+              onChange(raw.slice(0, SPECIMEN_MAX), true);
+            } else {
+              onChange(raw, false);
+            }
+          }}
+          onPaste={(event) => {
+            const pasted = event.clipboardData.getData('text');
+            if (pasted.length > SPECIMEN_MAX) {
+              event.preventDefault();
+              onChange(pasted.slice(0, SPECIMEN_MAX), true);
+            }
+          }}
+          placeholder="Type to preview all fonts…"
+          className="scan-focusable h-11 w-full rounded-xl border border-[#d7e2f1] bg-white pl-3.5 pr-10 text-[15px] font-medium text-[#102035] outline-none transition-shadow placeholder:font-normal placeholder:text-[#94a3b8] focus:border-[#1d62dd] focus:shadow-[0_0_0_4px_rgba(29,98,221,0.12)]"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange('', false);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+            className="scan-focusable absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-[#f1f5f9] text-[#94a3b8] transition-colors hover:bg-[#e2e8f0] hover:text-[#475569]"
+            aria-label="Clear specimen"
+          >
+            <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {toast && (
+        <p className="text-[12px] font-medium text-[#d97706]" role="status">
+          {toast}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SkeletonGrid({ reducedMotion }: { reducedMotion: boolean | null }) {
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {[...Array(6)].map((_, i) => (
+        <motion.div
+          key={i}
+          initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: 0.18,
+            delay: reducedMotion ? 0 : Math.min(i, 3) * 0.08,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+          className="flex h-[300px] flex-col overflow-hidden rounded-[20px] border border-[rgba(215,226,241,0.85)] bg-[rgba(255,255,255,0.45)] p-5"
+        >
+          <div className="flex justify-between gap-3">
+            <div className="scan-shimmer h-[22px] w-1/2 rounded-md" />
+            <div className="scan-shimmer h-5 w-14 rounded-full" />
+          </div>
+          <div className="mt-2 scan-shimmer h-3.5 w-1/3 rounded-md" />
+          <div className="mt-8 flex flex-1 flex-col justify-center gap-3">
+            <div className="scan-shimmer h-[22px] w-[72%] rounded-md" />
+            <div className="scan-shimmer h-[22px] w-[48%] rounded-md" />
+          </div>
+          <div className="mt-auto space-y-2">
+            <div className="scan-shimmer h-11 w-full rounded-xl" />
+            <div className="scan-shimmer h-11 w-full rounded-xl" />
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
 
 function ScanResults() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const urlParam = searchParams.get('url');
+  const reducedMotion = useReducedMotion();
+  const rawUrlParam = searchParams.get('url');
 
   const [fonts, setFonts] = useState<FontInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [previewText, setPreviewText] = useState('Sphinx of black quartz, judge my vow');
+  const [status, setStatus] = useState<ExtractStatus>('loading');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [previewText, setPreviewText] = useState(DEFAULT_SPECIMEN);
+  const [specimenToast, setSpecimenToast] = useState<string | null>(null);
   const [targetHost, setTargetHost] = useState('');
+  const [normalizedUrl, setNormalizedUrl] = useState('');
+  const [loadElapsedMs, setLoadElapsedMs] = useState(0);
+  const errorHeadingRef = useRef<HTMLHeadingElement>(null);
+  const emptyHeadingRef = useRef<HTMLHeadingElement>(null);
+  const fetchIdRef = useRef(0);
+
+  const goHome = useCallback(() => router.push('/'), [router]);
+
+  const fetchFonts = useCallback(async (url: string) => {
+    const requestId = ++fetchIdRef.current;
+    setStatus('loading');
+    setErrorMessage('');
+    setFonts([]);
+    setLoadElapsedMs(0);
+
+    try {
+      const response = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = await response.json();
+
+      if (requestId !== fetchIdRef.current) return;
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to extract fonts');
+      }
+
+      const sortedFonts = sortFonts(data.fonts || []);
+      setFonts(sortedFonts);
+
+      if (sortedFonts.length === 0) {
+        setStatus('empty');
+      } else {
+        setStatus('success');
+      }
+    } catch (err) {
+      if (requestId !== fetchIdRef.current) return;
+      const message =
+        err instanceof TypeError
+          ? 'Network error. Check your connection.'
+          : err instanceof Error
+            ? err.message
+            : 'Something went wrong during extraction.';
+      setErrorMessage(message);
+      setStatus('error');
+    }
+  }, []);
 
   useEffect(() => {
-    if (!urlParam) {
+    if (!rawUrlParam) {
       router.push('/');
       return;
     }
 
+    const url = normalizeScanUrl(rawUrlParam);
+    setNormalizedUrl(url);
+
     try {
-      const urlObj = new URL(urlParam.startsWith('http') ? urlParam : `https://${urlParam}`);
+      const urlObj = new URL(url);
       setTargetHost(urlObj.hostname);
     } catch {
-      setTargetHost(urlParam);
+      setTargetHost(rawUrlParam);
     }
 
-    const fetchFonts = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await fetch('/api/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: urlParam }),
-        });
+    void fetchFonts(url);
+  }, [rawUrlParam, router, fetchFonts]);
 
-        const data = await response.json();
+  // Loading elapsed helper timers (12s / 60s copy)
+  useEffect(() => {
+    if (status !== 'loading') {
+      setLoadElapsedMs(0);
+      return;
+    }
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      setLoadElapsedMs(Date.now() - started);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [status]);
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to extract fonts');
-        }
+  // Focus error/empty panel heading when it appears
+  useEffect(() => {
+    if (status === 'error') {
+      errorHeadingRef.current?.focus();
+    } else if (status === 'empty') {
+      emptyHeadingRef.current?.focus();
+    }
+  }, [status]);
 
-        const sortedFonts = [...data.fonts].sort((a: FontInfo, b: FontInfo) => {
-          const aIsItalic = a.style?.toLowerCase().includes('italic') ? 1 : 0;
-          const bIsItalic = b.style?.toLowerCase().includes('italic') ? 1 : 0;
-          if (aIsItalic !== bIsItalic) return aIsItalic - bIsItalic;
+  // Specimen toast auto-dismiss
+  useEffect(() => {
+    if (!specimenToast) return;
+    const t = window.setTimeout(() => setSpecimenToast(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [specimenToast]);
 
-          const aWeight = parseInt(a.weight || '400', 10);
-          const bWeight = parseInt(b.weight || '400', 10);
-          return Math.abs(aWeight - 400) - Math.abs(bWeight - 400);
-        });
+  const handleSpecimenChange = (next: string, truncated: boolean) => {
+    setPreviewText(next);
+    if (truncated) {
+      setSpecimenToast('Specimen limited to 120 characters');
+    }
+  };
 
-        sortedFonts.sort((a: FontInfo, b: FontInfo) => a.family.localeCompare(b.family));
-        setFonts(sortedFonts);
+  const statusLabel =
+    status === 'loading'
+      ? 'Analyzing source'
+      : status === 'success'
+        ? 'Analysis complete'
+        : status === 'empty'
+          ? 'No fonts found'
+          : 'Analysis failed';
 
-        if (sortedFonts.length === 0) {
-          setError('No typography assets found on this website.');
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Something went wrong during extraction.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const formatSummary = useMemo(() => {
+    if (status !== 'success' || fonts.length === 0) return '';
+    const formats = uniqueFormats(fonts);
+    if (formats.length === 0 || formats.length > 3) return '';
+    return formats.join(' · ');
+  }, [fonts, status]);
 
-    fetchFonts();
-  }, [urlParam, router]);
+  const countLabel =
+    fonts.length === 1 ? 'typography' : 'typographies';
+
+  const friendlyError = humanizeExtractError(errorMessage, targetHost);
 
   return (
-    <div className="min-h-screen bg-[#f7faff] text-slate-900 pb-24">
-      {/* Sleek Top Navigation Bar */}
-      <motion.nav 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-white/60 bg-white/70 px-6 backdrop-blur-xl md:px-10"
-      >
-        <button
-          onClick={() => router.push('/')}
-          className="group flex items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900"
-        >
-          <svg className="size-4 transition-transform group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-          </svg>
-          Back to scanner
-        </button>
-        <div className="flex items-center gap-2">
-          <span className="flex size-2 relative">
-            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${loading ? 'bg-amber-400' : fonts.length > 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-            <span className={`relative inline-flex size-2 rounded-full ${loading ? 'bg-amber-500' : fonts.length > 0 ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-          </span>
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
-            {loading ? 'Analyzing Source' : 'Analysis Complete'}
-          </span>
-        </div>
-      </motion.nav>
+    <div className="scan-page min-h-screen bg-[#f7faff] pb-24 text-[#102035]">
+      <ScanShellChrome
+        statusLabel={statusLabel}
+        statusKind={status}
+        targetHost={targetHost}
+        fullUrl={normalizedUrl || rawUrlParam || ''}
+        onBack={goHome}
+        reducedMotion={reducedMotion}
+      />
 
       <main className="mx-auto mt-10 w-full max-w-[1400px] px-6 md:px-10">
-        
-        {/* Header Section */}
         <header className="mb-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
           <div>
-            <h1 className="text-[2.25rem] font-bold tracking-tight text-slate-900 md:text-[3rem]">
-              Extracted Assets
+            <h1 className="text-[36px] font-bold tracking-[-0.02em] text-[#102035] md:text-[48px]">
+              Extracted assets
             </h1>
-            <p className="mt-2 flex items-center gap-2 text-[1.1rem] text-slate-500">
-              from <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 font-mono text-sm text-slate-700 shadow-sm">{targetHost || urlParam}</span>
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-[1.05rem] text-[#3f536d]">
+              from{' '}
+              <span
+                title={normalizedUrl || rawUrlParam || undefined}
+                className="max-w-[min(100%,420px)] truncate rounded-md border border-[#d7e2f1] bg-white px-2 py-0.5 font-mono text-sm text-[#102035] shadow-sm"
+              >
+                {targetHost || rawUrlParam}
+              </span>
             </p>
           </div>
-          
-          <div className="flex w-full flex-col gap-2 md:w-auto md:min-w-[320px]">
-            <label htmlFor="preview-text" className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-400">
-              Custom Specimen
-            </label>
-            <div className="relative">
-              <input
-                id="preview-text"
-                type="text"
-                value={previewText}
-                onChange={(event) => setPreviewText(event.target.value)}
-                placeholder="Type to preview all fonts..."
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-4 pr-10 text-[0.95rem] font-medium text-slate-800 shadow-sm outline-none transition-all placeholder:font-normal placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              />
-              {previewText && (
-                <button
-                  type="button"
-                  onClick={() => setPreviewText('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-slate-100 p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600"
-                  aria-label="Clear preview text"
-                >
-                  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
+
+          <SpecimenControl
+            value={previewText}
+            onChange={handleSpecimenChange}
+            toast={specimenToast}
+          />
         </header>
 
-        {/* Loading Skeleton */}
-        {loading && (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.1 }}
-                className="flex h-[320px] flex-col overflow-hidden rounded-[2rem] border border-white/60 bg-white/40 p-6 backdrop-blur-xl"
-              >
-                <div className="flex justify-between">
-                  <div className="h-6 w-1/2 animate-pulse rounded-md bg-slate-200/60"></div>
-                  <div className="h-5 w-16 animate-pulse rounded-full bg-slate-200/60"></div>
-                </div>
-                <div className="mt-2 h-4 w-1/3 animate-pulse rounded-md bg-slate-200/40"></div>
-                <div className="mt-8 flex flex-1 flex-col justify-center gap-3">
-                  <div className="h-4 w-full animate-pulse rounded-md bg-slate-200/60"></div>
-                  <div className="h-4 w-4/5 animate-pulse rounded-md bg-slate-200/60"></div>
-                </div>
-                <div className="mt-auto flex gap-2">
-                  <div className="h-8 w-20 animate-pulse rounded-xl bg-slate-200/60"></div>
-                  <div className="h-8 w-20 animate-pulse rounded-xl bg-slate-200/60"></div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+        {status === 'loading' && (
+          <>
+            <SkeletonGrid reducedMotion={reducedMotion} />
+            {loadElapsedMs >= 12000 && loadElapsedMs < 60000 && (
+              <p className="mt-6 text-center text-[13px] text-[#6b7f98]">
+                Large sites can take up to a minute…
+              </p>
+            )}
+            {loadElapsedMs >= 60000 && (
+              <div className="mt-6 flex flex-col items-center gap-2 text-center">
+                <p className="text-[13px] text-[#6b7f98]">
+                  Still working — you can go back and retry
+                </p>
+                <button
+                  type="button"
+                  onClick={goHome}
+                  className="scan-focusable text-[13px] font-semibold text-[#1d62dd] underline-offset-2 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Error State */}
         <AnimatePresence mode="wait">
-          {!loading && error && (
+          {status === 'empty' && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              key="empty"
+              initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex min-h-[40vh] flex-col items-center justify-center rounded-[2rem] border border-rose-100 bg-rose-50/50 p-10 text-center backdrop-blur-xl"
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="flex min-h-[36vh] flex-col items-center justify-center rounded-[20px] border border-[rgba(215,226,241,0.85)] bg-[rgba(255,255,255,0.7)] p-10 text-center backdrop-blur-xl"
             >
-              <div className="mb-5 flex size-16 items-center justify-center rounded-full bg-rose-100 text-rose-500">
-                <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <div className="mb-5 flex size-14 items-center justify-center rounded-full bg-[#f1f5f9] text-[#6b7f98]">
+                <svg className="size-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6"
+                  />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Analysis Failed</h3>
-              <p className="mt-2 text-slate-600 max-w-md">{error}</p>
-              <button
-                onClick={() => router.push('/')}
-                className="mt-6 rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-105"
+              <h2
+                ref={emptyHeadingRef}
+                tabIndex={-1}
+                className="text-[20px] font-bold text-[#102035] outline-none"
               >
-                Scan another URL
-              </button>
+                No typography assets found
+              </h2>
+              <p className="mt-2 max-w-[420px] text-[14px] font-normal text-[#3f536d]">
+                We couldn&apos;t detect webfonts on {targetHost || 'this site'}. The site may use
+                system fonts, block automation, or load type late.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={goHome}
+                  className="scan-focusable rounded-full bg-[#102035] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1e293b]"
+                >
+                  Scan another URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => normalizedUrl && void fetchFonts(normalizedUrl)}
+                  className="scan-focusable rounded-full border border-[#d7e2f1] bg-white px-6 py-2.5 text-sm font-semibold text-[#3f536d] transition-colors hover:border-[#bccde4] hover:text-[#102035]"
+                >
+                  Retry
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {status === 'error' && (
+            <motion.div
+              key="error"
+              initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="flex min-h-[36vh] flex-col items-center justify-center rounded-[20px] border border-[#fecaca] bg-[#fff5f5] p-10 text-center backdrop-blur-xl"
+            >
+              <div className="mb-5 flex size-14 items-center justify-center rounded-full bg-[#fee2e2] text-[#bf3f4a]">
+                <svg className="size-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h2
+                ref={errorHeadingRef}
+                tabIndex={-1}
+                className="text-[20px] font-bold text-[#102035] outline-none"
+              >
+                Analysis failed
+              </h2>
+              <p className="mt-2 max-w-[420px] text-[14px] text-[#3f536d]">{friendlyError}</p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => normalizedUrl && void fetchFonts(normalizedUrl)}
+                  className="scan-focusable rounded-full bg-[#102035] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1e293b]"
+                >
+                  Retry analysis
+                </button>
+                <button
+                  type="button"
+                  onClick={goHome}
+                  className="scan-focusable rounded-full border border-[#d7e2f1] bg-white px-6 py-2.5 text-sm font-semibold text-[#3f536d] transition-colors hover:border-[#bccde4] hover:text-[#102035]"
+                >
+                  Scan another URL
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Results Grid */}
-        {!loading && !error && fonts.length > 0 && (
+        {status === 'success' && fonts.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
           >
-            <div className="mb-6 flex items-center justify-between">
-              <span className="text-sm font-semibold tracking-wide text-slate-500">
-                Found <span className="text-slate-900">{fonts.length}</span> active typographies
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+              <span
+                className="text-[13px] font-semibold text-[#3f536d]"
+                title="Sorted A–Z by family"
+              >
+                Found{' '}
+                <span className="tabular-nums text-[#102035]">{fonts.length}</span>{' '}
+                {countLabel}
               </span>
+              {formatSummary && (
+                <span className="hidden text-[12px] text-[#6b7f98] md:inline">{formatSummary}</span>
+              )}
             </div>
-            {/* Reusing FontGrid but passing the preview text down */}
             <div className="relative -mx-5 px-5 md:mx-0 md:px-0">
               <FontGrid fonts={fonts} previewText={previewText} />
             </div>
@@ -219,13 +587,27 @@ function ScanResults() {
   );
 }
 
+function ScanSuspenseFallback() {
+  return (
+    <div className="scan-page min-h-screen bg-[#f7faff] pb-24 text-[#102035]">
+      <div className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[rgba(215,226,241,0.7)] bg-[rgba(255,255,255,0.78)] px-6 backdrop-blur-[20px] md:px-10">
+        <div className="scan-shimmer h-5 w-28 rounded-md" />
+        <div className="scan-shimmer h-6 w-36 rounded-full" />
+      </div>
+      <main className="mx-auto mt-10 w-full max-w-[1400px] px-6 md:px-10">
+        <header className="mb-10">
+          <div className="scan-shimmer h-10 w-64 rounded-lg md:h-12 md:w-80" />
+          <div className="mt-3 scan-shimmer h-5 w-40 rounded-md" />
+        </header>
+        <SkeletonGrid reducedMotion={true} />
+      </main>
+    </div>
+  );
+}
+
 export default function ScanPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#f7faff] flex items-center justify-center">
-        <div className="animate-spin size-8 border-4 border-slate-200 border-t-blue-600 rounded-full"></div>
-      </div>
-    }>
+    <Suspense fallback={<ScanSuspenseFallback />}>
       <ScanResults />
     </Suspense>
   );
