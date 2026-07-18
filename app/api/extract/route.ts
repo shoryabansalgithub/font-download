@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-interface FontInfo {
-  name: string;
-  family: string;
-  format: string;
-  url: string;
-  weight?: string;
-  style?: string;
-  referer?: string;
-}
+import {
+  groupFontFaces,
+  inferDescriptorsFromFileName,
+  normalizeFamilyName,
+  type RawFontFace,
+} from '../../lib/font-grouping';
 
 // More robust regex to extract @font-face blocks
 const fontFaceRegex = /@font-face\s*\{([\s\S]*?)\}/gi;
@@ -18,8 +14,6 @@ const importRegex = /@import\s+(?:url\(['"]?|['"])([^'")]+\.css[^'")]*)(?:['"]?\
 // Regex to extract properties from @font-face
 const fontFamilyRegex = /font-family\s*:\s*['"]?([^'";]+)['"]?/i;
 const srcRegex = /src\s*:\s*([^;]+)/i;
-const urlRegex = /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
-const formatRegex = /format\s*\(\s*['"]?([^'")]+)['"]?\s*\)/i;
 const weightRegex = /font-weight\s*:\s*([^;]+)/i;
 const styleRegex = /font-style\s*:\s*([^;]+)/i;
 
@@ -49,10 +43,6 @@ function getFormatFromUrl(url: string): string {
 const fontSourceRegex = /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)\s*(?:format\s*\(\s*['"]?([^'")]+)['"]?\s*\))?/gi;
 const formatPreference = ['WOFF2', 'WOFF', 'OPENTYPE', 'TRUETYPE', 'OTF', 'TTF', 'EOT', 'SVG'];
 
-function normalizeFamilyName(family: string): string {
-  return family.replace(/["']/g, '').trim();
-}
-
 function pickBestSource(src: string, baseUrl: string): { url: string; format: string } | null {
   const candidates: { url: string; format: string }[] = [];
   let match;
@@ -77,8 +67,8 @@ function pickBestSource(src: string, baseUrl: string): { url: string; format: st
   return candidates[0];
 }
 
-function extractFontsFromCSS(css: string, baseUrl: string): { fonts: FontInfo[], imports: string[] } {
-  const fonts: FontInfo[] = [];
+function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace[], imports: string[] } {
+  const fonts: RawFontFace[] = [];
   const imports: string[] = [];
 
   // Extract @import rules
@@ -125,7 +115,7 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: FontInfo[],
 
 const MAX_IMPORT_DEPTH = 3;
 
-async function fetchAndParseCSS(url: string, depth: number = 0, fetchedUrls: Set<string> = new Set()): Promise<FontInfo[]> {
+async function fetchAndParseCSS(url: string, depth: number = 0, fetchedUrls: Set<string> = new Set()): Promise<RawFontFace[]> {
   if (depth > MAX_IMPORT_DEPTH || fetchedUrls.has(url)) return [];
   fetchedUrls.add(url);
 
@@ -146,8 +136,9 @@ async function fetchAndParseCSS(url: string, depth: number = 0, fetchedUrls: Set
   }
 }
 
-async function extractFontsWithPlaywright(targetUrl: string): Promise<FontInfo[]> {
-  let browser: any;
+async function extractFontsWithPlaywright(targetUrl: string): Promise<RawFontFace[]> {
+  // Type-only import: erased at compile time, so playwright stays lazily loaded.
+  let browser: import('playwright').Browser | undefined;
   try {
     const { chromium } = await import('playwright');
     browser = await chromium.launch({ headless: true });
@@ -157,7 +148,9 @@ async function extractFontsWithPlaywright(targetUrl: string): Promise<FontInfo[]
 
     await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForTimeout(500);
-    await page.evaluate(() => (document.fonts ? document.fonts.ready : Promise.resolve()));
+    await page.evaluate(async () => {
+      if (document.fonts) await document.fonts.ready;
+    });
 
     const fontFaces = await page.evaluate(() => {
       return Array.from(document.fonts).map((fontFace) => ({
@@ -169,7 +162,7 @@ async function extractFontsWithPlaywright(targetUrl: string): Promise<FontInfo[]
       }));
     });
 
-    const fonts: FontInfo[] = [];
+    const fonts: RawFontFace[] = [];
     for (const face of fontFaces) {
       if (face.status !== 'loaded' && face.status !== 'loading') continue;
       if (!face.src) continue;
@@ -233,7 +226,7 @@ export async function POST(request: NextRequest) {
     }
 
     const html = await response.text();
-    const allFonts: FontInfo[] = [];
+    const allFonts: RawFontFace[] = [];
     const fetchedCssUrls = new Set<string>();
 
     // 1. Inline styles
@@ -272,14 +265,19 @@ export async function POST(request: NextRequest) {
       } else if ((rel === 'preload' || rel === 'prefetch') && as === 'font') {
         const format = getFormatFromUrl(resolvedUrl);
         const name = resolvedUrl.split('/').pop()?.split('?')[0] || 'preloaded-font';
+        // A preload hint carries no descriptors, so recover what we can from the
+        // filename. If the same file also appears in a real @font-face, grouping
+        // discards this guess in favour of the declared data.
+        const inferred = inferDescriptorsFromFileName(name.split('.')[0] || 'Unknown Font');
         allFonts.push({
           name: name,
-          family: name.split('.')[0] || 'Unknown Font',
+          family: inferred.family,
           format,
           url: resolvedUrl,
-          weight: '400',
-          style: 'normal',
-          referer: targetUrl.href
+          weight: inferred.weight,
+          style: inferred.style,
+          referer: targetUrl.href,
+          provenance: 'preload'
         });
       }
     }
@@ -290,28 +288,16 @@ export async function POST(request: NextRequest) {
     const fontsWithReferer = linkedFonts.flat().map(font => ({ ...font, referer: targetUrl.href }));
     allFonts.push(...fontsWithReferer);
 
-    // Deduplicate fonts by URL (keeping the first occurrence)
-    const uniqueFontsMap = new Map<string, FontInfo>();
-    for (const font of allFonts) {
-      if (!uniqueFontsMap.has(font.url)) {
-        uniqueFontsMap.set(font.url, font);
-      }
-    }
-    const uniqueFonts = Array.from(uniqueFontsMap.values());
-
-    const mergedFonts = realFonts.length > 0 ? [...realFonts, ...uniqueFonts] : uniqueFonts;
-    const mergedUnique = new Map<string, FontInfo>();
-    for (const font of mergedFonts) {
-      if (!mergedUnique.has(font.url)) {
-        mergedUnique.set(font.url, font);
-      }
-    }
-
-    const mergedValues = Array.from(mergedUnique.values());
+    // Collapse every discovered face into one entry per family: de-duplicates
+    // repeats from multiple stylesheets, @import chains and preload hints, and
+    // folds a family's weight/style fan-out into a single grouped result.
+    const families = groupFontFaces([...realFonts, ...allFonts]);
+    const totalVariants = families.reduce((sum, family) => sum + family.variants.length, 0);
 
     return NextResponse.json({
-      fonts: mergedValues,
-      totalFound: mergedValues.length,
+      families,
+      totalFound: families.length,
+      totalVariants,
       sourceUrl: targetUrl.href
     });
 

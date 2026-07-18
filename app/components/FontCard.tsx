@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { FontAlternative, FontInfo } from '../types';
+import { FontAlternative, FontFamily } from '../types';
+import { parseWeightRange } from '../lib/font-grouping';
 
 interface FontCardProps {
-  font: FontInfo;
+  fontFamily: FontFamily;
   index: number;
   previewText?: string;
   cardKey?: string;
@@ -28,8 +29,23 @@ function formatToExtension(format: string): string {
 
 function buildDownloadFilename(family: string, weight: string | undefined, format: string): string {
   const safeFamily = (family || 'font').replace(/\s+/g, '-').replace(/[^\w.-]+/g, '');
-  const safeWeight = (weight || '400').replace(/\s+/g, '');
+  // A variable font spans a weight range, so "Inter-100900.woff2" would be nonsense.
+  const safeWeight = parseWeightRange(weight).isRange
+    ? 'Variable'
+    : (weight || '400').replace(/\s+/g, '');
   return `${safeFamily}-${safeWeight}.${formatToExtension(format)}`;
+}
+
+/**
+ * A single concrete weight for rendering. Variable fonts declare a range
+ * ("100 900"), which is legal in an @font-face descriptor but invalid inside a
+ * CSS `font` shorthand - passing it to document.fonts.load/check throws, which
+ * previously made every variable font report "Preview unavailable".
+ */
+function renderableWeight(weight: string | undefined): string {
+  const range = parseWeightRange(weight);
+  if (!range.isRange) return String(range.min);
+  return String(Math.min(Math.max(400, range.min), range.max));
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -89,7 +105,12 @@ function normalizeFormatDisplay(format: string): string {
   return (format || 'FONT').toUpperCase().slice(0, 10);
 }
 
-export default function FontCard({ font, index, previewText, cardKey }: FontCardProps) {
+export default function FontCard({ fontFamily, index, previewText, cardKey }: FontCardProps) {
+  // Preview and download act on the family's representative variant (upright 400
+  // where available); the rest of the family is summarised by the variant count.
+  const font = fontFamily.representative;
+  const variantCount = fontFamily.variants.length;
+  const previewWeight = renderableWeight(font.weight);
   const reducedMotion = useReducedMotion();
   const [previewState, setPreviewState] = useState<PreviewState>('loading');
   const [showAlternatives, setShowAlternatives] = useState(false);
@@ -105,7 +126,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
   const displayUrl = isDataUrl
     ? font.url
     : `/api/font?url=${encodeURIComponent(font.url)}&referer=${encodeURIComponent(font.referer || '')}`;
-  const downloadFilename = buildDownloadFilename(font.family, font.weight, font.format);
+  const downloadFilename = buildDownloadFilename(fontFamily.family, font.weight, font.format);
 
   const fontFaceId = useMemo(() => {
     const seed = `${font.url}|${font.weight || '400'}|${font.style || 'normal'}`;
@@ -161,9 +182,8 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
 
     setPreviewState('loading');
 
-    const weight = font.weight || '400';
     const timeoutMs = isDataUrl ? 1500 : 4000;
-    const loadSpec = `${weight} 48px "${previewFamily}"`;
+    const loadSpec = `${previewWeight} 48px "${previewFamily}"`;
 
     const loadPromise =
       typeof document !== 'undefined' && document.fonts?.load
@@ -197,7 +217,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
       const el = document.getElementById(styleId);
       if (el) el.remove();
     };
-  }, [inView, displayUrl, font.weight, font.style, fontFaceId, previewFamily, isDataUrl]);
+  }, [inView, displayUrl, font.weight, font.style, fontFaceId, previewFamily, isDataUrl, previewWeight]);
 
   // Clear success / error banners after a short delay
   useEffect(() => {
@@ -262,7 +282,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          family: font.family,
+          family: fontFamily.family,
           weight: font.weight,
           style: font.style,
           url: font.url,
@@ -285,7 +305,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
       setAlternatives([]);
       setAltState('error');
     }
-  }, [font.family, font.weight, font.style, font.url, font.referer]);
+  }, [fontFamily.family, font.weight, font.style, font.url, font.referer]);
 
   const handleAlternativesClick = () => {
     if (altState === 'loading') return;
@@ -328,6 +348,12 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
         : 'Find similar free fonts';
 
   const formatLabel = normalizeFormatDisplay(font.format);
+  const variantLabel =
+    variantCount > 1
+      ? `${variantCount} variants`
+      : fontFamily.isVariable
+        ? 'Variable'
+        : font.weight || '400';
   const styleLabel =
     font.style && font.style.toLowerCase() !== 'normal' && font.style.toLowerCase() !== 'unset'
       ? font.style
@@ -354,10 +380,10 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
         <header className="flex min-h-[52px] items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h3
-              title={font.family}
+              title={fontFamily.family}
               className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[#102035] transition-colors duration-[160ms] group-hover:text-[#0f4fbd]"
             >
-              {font.family}
+              {fontFamily.family}
             </h3>
             <div className="mt-1 flex flex-wrap items-center gap-x-0 gap-y-1">
               <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6b7f98]">
@@ -365,7 +391,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
               </span>
               <span className="mx-1.5 inline-block size-[3px] rounded-full bg-[#cbd5e1]" aria-hidden />
               <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6b7f98]">
-                {font.weight || '400'}
+                {variantLabel}
               </span>
               {styleLabel && (
                 <>
@@ -393,7 +419,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
               style={{
                 fontFamily: `'${previewFamily}', ui-sans-serif, system-ui, sans-serif`,
                 fontStyle: font.style || 'normal',
-                fontWeight: font.weight || 'normal',
+                fontWeight: previewWeight,
               }}
             >
               {previewText || 'Aa'}
@@ -410,7 +436,7 @@ export default function FontCard({ font, index, previewText, cardKey }: FontCard
                 style={{
                   fontFamily: 'ui-sans-serif, system-ui, sans-serif',
                   fontStyle: font.style || 'normal',
-                  fontWeight: font.weight || 'normal',
+                  fontWeight: previewWeight,
                 }}
               >
                 {previewText || 'Aa'}

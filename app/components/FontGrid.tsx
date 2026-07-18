@@ -1,22 +1,22 @@
 'use client';
 
-import { FontInfo } from '../types';
+import { FontFamily } from '../types';
 import FontCard, { hashFontId } from './FontCard';
 
 interface FontGridProps {
-  fonts: FontInfo[];
+  families: FontFamily[];
   previewText?: string;
 }
 
-function stableFontKey(font: FontInfo, index: number): string {
-  const urlHash = hashFontId(font.url || font.family || String(index)).slice(0, 12);
-  return `${font.family}|${font.weight || '400'}|${font.style || 'normal'}|${urlHash}|${index}`;
+function stableFamilyKey(fontFamily: FontFamily, index: number): string {
+  const seed = fontFamily.representative.url || fontFamily.family || String(index);
+  return `${fontFamily.family}|${hashFontId(seed).slice(0, 12)}`;
 }
 
-export default function FontGrid({ fonts, previewText }: FontGridProps) {
-  if (fonts.length === 0) return null;
+export default function FontGrid({ families, previewText }: FontGridProps) {
+  if (families.length === 0) return null;
 
-  const single = fonts.length === 1;
+  const single = families.length === 1;
 
   return (
     <div
@@ -26,13 +26,13 @@ export default function FontGrid({ fonts, previewText }: FontGridProps) {
           : 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
       }
     >
-      {fonts.map((font, index) => {
-        const key = stableFontKey(font, index);
+      {families.map((fontFamily, index) => {
+        const key = stableFamilyKey(fontFamily, index);
         return (
           <FontCard
             key={key}
             cardKey={key}
-            font={font}
+            fontFamily={fontFamily}
             index={index}
             previewText={previewText}
           />

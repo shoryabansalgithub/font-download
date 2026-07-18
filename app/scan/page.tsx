@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { FontInfo } from '../types';
+import { FontFamily } from '../types';
 import FontGrid from '../components/FontGrid';
 
 type ExtractStatus = 'loading' | 'success' | 'empty' | 'error';
@@ -18,19 +18,8 @@ function normalizeScanUrl(raw: string): string {
   return `https://${trimmed}`;
 }
 
-function sortFonts(fonts: FontInfo[]): FontInfo[] {
-  return [...fonts].sort((a, b) => {
-    const familyCmp = a.family.localeCompare(b.family);
-    if (familyCmp !== 0) return familyCmp;
-
-    const aWeight = parseInt(a.weight || '400', 10) || 400;
-    const bWeight = parseInt(b.weight || '400', 10) || 400;
-    if (aWeight !== bWeight) return aWeight - bWeight;
-
-    const aItalic = a.style?.toLowerCase().includes('italic') ? 1 : 0;
-    const bItalic = b.style?.toLowerCase().includes('italic') ? 1 : 0;
-    return aItalic - bItalic;
-  });
+function sortFamilies(families: FontFamily[]): FontFamily[] {
+  return [...families].sort((a, b) => a.family.localeCompare(b.family));
 }
 
 function normalizeFormatToken(format: string): string {
@@ -69,10 +58,12 @@ function humanizeExtractError(message: string, host: string): string {
   return message;
 }
 
-function uniqueFormats(fonts: FontInfo[]): string[] {
+function uniqueFormats(families: FontFamily[]): string[] {
   const seen = new Set<string>();
-  for (const font of fonts) {
-    seen.add(normalizeFormatToken(font.format || ''));
+  for (const family of families) {
+    for (const format of family.formats) {
+      seen.add(normalizeFormatToken(format || ''));
+    }
   }
   return Array.from(seen).filter(Boolean);
 }
@@ -270,7 +261,7 @@ function ScanResults() {
   const reducedMotion = useReducedMotion();
   const rawUrlParam = searchParams.get('url');
 
-  const [fonts, setFonts] = useState<FontInfo[]>([]);
+  const [families, setFamilies] = useState<FontFamily[]>([]);
   const [status, setStatus] = useState<ExtractStatus>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [previewText, setPreviewText] = useState(DEFAULT_SPECIMEN);
@@ -288,7 +279,7 @@ function ScanResults() {
     const requestId = ++fetchIdRef.current;
     setStatus('loading');
     setErrorMessage('');
-    setFonts([]);
+    setFamilies([]);
     setLoadElapsedMs(0);
 
     try {
@@ -306,10 +297,10 @@ function ScanResults() {
         throw new Error(data.error || 'Failed to extract fonts');
       }
 
-      const sortedFonts = sortFonts(data.fonts || []);
-      setFonts(sortedFonts);
+      const sortedFamilies = sortFamilies(data.families || []);
+      setFamilies(sortedFamilies);
 
-      if (sortedFonts.length === 0) {
+      if (sortedFamilies.length === 0) {
         setStatus('empty');
       } else {
         setStatus('success');
@@ -392,14 +383,14 @@ function ScanResults() {
           : 'Analysis failed';
 
   const formatSummary = useMemo(() => {
-    if (status !== 'success' || fonts.length === 0) return '';
-    const formats = uniqueFormats(fonts);
+    if (status !== 'success' || families.length === 0) return '';
+    const formats = uniqueFormats(families);
     if (formats.length === 0 || formats.length > 3) return '';
     return formats.join(' · ');
-  }, [fonts, status]);
+  }, [families, status]);
 
   const countLabel =
-    fonts.length === 1 ? 'typography' : 'typographies';
+    families.length === 1 ? 'typography' : 'typographies';
 
   const friendlyError = humanizeExtractError(errorMessage, targetHost);
 
@@ -558,7 +549,7 @@ function ScanResults() {
           )}
         </AnimatePresence>
 
-        {status === 'success' && fonts.length > 0 && (
+        {status === 'success' && families.length > 0 && (
           <motion.div
             initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -570,7 +561,7 @@ function ScanResults() {
                 title="Sorted A–Z by family"
               >
                 Found{' '}
-                <span className="tabular-nums text-[#102035]">{fonts.length}</span>{' '}
+                <span className="tabular-nums text-[#102035]">{families.length}</span>{' '}
                 {countLabel}
               </span>
               {formatSummary && (
@@ -578,7 +569,7 @@ function ScanResults() {
               )}
             </div>
             <div className="relative -mx-5 px-5 md:mx-0 md:px-0">
-              <FontGrid fonts={fonts} previewText={previewText} />
+              <FontGrid families={families} previewText={previewText} />
             </div>
           </motion.div>
         )}
