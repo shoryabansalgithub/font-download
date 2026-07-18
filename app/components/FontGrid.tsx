@@ -6,6 +6,8 @@ import FontCard, { hashFontId } from './FontCard';
 interface FontGridProps {
   families: FontFamily[];
   previewText?: string;
+  /** Editing the specimen in any one row retunes every row, so the faces stay comparable. */
+  onPreviewTextChange?: (next: string) => void;
 }
 
 function stableFamilyKey(fontFamily: FontFamily, index: number): string {
@@ -13,19 +15,14 @@ function stableFamilyKey(fontFamily: FontFamily, index: number): string {
   return `${fontFamily.family}|${hashFontId(seed).slice(0, 12)}`;
 }
 
-export default function FontGrid({ families, previewText }: FontGridProps) {
+export default function FontGrid({ families, previewText, onPreviewTextChange }: FontGridProps) {
   if (families.length === 0) return null;
 
-  const single = families.length === 1;
-
+  // A stack of full-measure rows, not a grid of tiles. A typeface is judged on a
+  // line of text at size; a half- or quarter-width column chops the specimen into
+  // ragged fragments and shrinks the one thing the user came to look at.
   return (
-    <div
-      className={
-        single
-          ? 'grid grid-cols-1 gap-5 lg:max-w-[420px]'
-          : 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-      }
-    >
+    <div className="flex flex-col gap-4">
       {families.map((fontFamily, index) => {
         const key = stableFamilyKey(fontFamily, index);
         return (
@@ -35,6 +32,7 @@ export default function FontGrid({ families, previewText }: FontGridProps) {
             fontFamily={fontFamily}
             index={index}
             previewText={previewText}
+            onPreviewTextChange={onPreviewTextChange}
           />
         );
       })}

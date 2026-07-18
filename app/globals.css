@@ -130,10 +130,113 @@ select {
 
 /* ── Scan results screen (second screen) ─────────────────────────── */
 
+/*
+ * Scoped to .scan-page so none of this reaches the landing page, which is
+ * being treated separately. Everything below is additive.
+ *
+ * The base token set carries ink/line/brand but only three ink steps, which is
+ * not enough for a screen made almost entirely of quiet type. The extra steps
+ * are declared here once and referenced everywhere rather than retyped.
+ */
+.scan-page {
+  /* The results screen is set in Inter throughout, tightened. Specimen text,
+     the weight ramp and the family names all set font-family/weight inline from
+     the scanned font's own data, so they override this rather than inherit it. */
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+
+  --scan-ink-1: var(--text-1);
+  --scan-ink-2: var(--text-2);
+  --scan-ink-3: #55697f; /* controls at rest: ramp, toggles - 5.7:1 */
+  /* Small mono meta sits at 10-12px, so it has to clear 4.5:1 rather than the
+     3:1 large-text floor. The lighter greys this screen started with measured
+     3.35:1 and 2.51:1 and were unreadable at that size. */
+  --scan-ink-4: #66798f; /* mono meta and captions - 4.5:1 */
+  --scan-ink-5: #748aa4; /* the headline's second line, 34px+ only - 3.6:1 */
+  --scan-line-1: #d2ddee; /* control borders */
+  --scan-line-2: #dce6f5; /* card edge */
+  --scan-line-3: #e8eef8; /* dividers inside a card */
+  --scan-wash: #eef3fb; /* hover wash on quiet controls */
+  --scan-specimen: #152742; /* specimen ink, one step warmer than body */
+  --scan-accent: var(--brand-1);
+  --scan-accent-deep: var(--brand-2);
+}
+
+/*
+ * The base sheet kills :focus-visible globally with no replacement. Rather than
+ * depend on every element remembering .scan-focusable, every focusable thing
+ * inside the scan screen gets the ring back by default.
+ */
+.scan-page :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible,
 .scan-page .scan-focusable:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(29, 98, 221, 0.45);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px rgba(29, 98, 221, 0.45);
 }
+
+/* A heading focused only to move the screen reader should not draw a ring. */
+.scan-page [tabindex='-1']:focus-visible {
+  box-shadow: none;
+}
+
+/*
+ * The specimen card. It rests almost flat so the page reads as a sheet of
+ * typography rather than a tray of widgets; the lift arrives only on intent.
+ */
+.specimen-card {
+  box-shadow:
+    0 1px 2px rgba(16, 32, 53, 0.03),
+    0 10px 28px -22px rgba(12, 30, 60, 0.3);
+}
+
+@media (hover: hover) {
+  .specimen-card:hover {
+    border-color: #c6d6ec;
+    box-shadow:
+      0 1px 2px rgba(16, 32, 53, 0.04),
+      0 18px 40px -26px rgba(12, 30, 60, 0.42);
+  }
+}
+
+.specimen-card:focus-within {
+  border-color: #c6d6ec;
+  box-shadow:
+    0 1px 2px rgba(16, 32, 53, 0.04),
+    0 18px 40px -26px rgba(12, 30, 60, 0.42);
+}
+
+/*
+ * The specimen is the input. It carries no box or border at rest - a field
+ * outline around the type would compete with the type - so the affordance is a
+ * faint baseline rule on hover and the standard ring once focused.
+ */
+.scan-page .specimen-line[contenteditable] {
+  cursor: text;
+  box-decoration-break: clone;
+}
+
+@media (hover: hover) {
+  .scan-page .specimen-line[contenteditable]:hover:not(:focus) {
+    box-shadow: inset 0 -1px 0 0 var(--scan-line-1);
+  }
+}
+
+.scan-page .specimen-line[contenteditable]:focus-visible,
+.scan-page .specimen-line[contenteditable]:focus {
+  outline: none;
+  box-shadow: inset 0 -2px 0 0 var(--scan-accent);
+}
+
+.scan-page .specimen-line[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--scan-ink-5);
+}
+
+/* Swapping the rendered face is a content change, so it crossfades in place
+   instead of sliding - the specimen must not move while it is being judged.
+   Driven by a transition on opacity in the component, not a keyed remount. */
 
 @keyframes scan-pulse {
   0%,
