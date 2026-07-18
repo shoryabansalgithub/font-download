@@ -27,9 +27,13 @@ Sharp edges when touching font rendering:
 
 ## Validation
 
-No test runner is configured. Validate with `npm run lint`, `npx tsc --noEmit`
-and `npm run build`, plus an end-to-end scan in a browser - font extraction
-depends on real sites' CSS, so reading code is not sufficient to prove a fix.
+`npm test` covers the family grouping rules. There is no test framework: it is a
+plain `tsx` script (`scripts/test-font-grouping.ts`) that exits non-zero on
+failure, following the same convention as `build:features`.
+
+Validate with `npm test`, `npm run lint`, `npx tsc --noEmit` and `npm run build`,
+plus an end-to-end scan in a browser - font extraction depends on real sites' CSS,
+so reading code is not sufficient to prove a fix.
 
 ## Maintaining this file
 
