@@ -74,6 +74,22 @@ function canonicalize(family: string): string {
     return family.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/**
+ * True when the token ending at `name`'s tail starts at a word boundary: after
+ * a separator ("Inter-Bold"), at a camelCase edge ("InterBold"), or where a
+ * numeric run begins ("Inter700"). Without this, names that merely *end* in a
+ * token are mangled - "Highlight" is not "High" + light.
+ */
+function tokenStartsAtBoundary(name: string, tokenLength: number): boolean {
+    const start = name.length - tokenLength;
+    if (start <= 0) return false;
+    const before = name[start - 1];
+    const first = name[start];
+    if (/[\s._-]/.test(before)) return true;
+    if (/\d/.test(first)) return /[a-z]/i.test(before);
+    return /[a-z0-9]/.test(before) && /[A-Z]/.test(first);
+}
+
 interface WeightRange {
     min: number;
     max: number;
@@ -124,10 +140,10 @@ export function stripRedundantDescriptorSuffix(
     const declaredStyle = normalizeStyleValue(style);
     const declaredWeight = parseWeightRange(weight);
 
+    // A range never *restates* a single weight: "Fraunces Black" at "100 900"
+    // is a family genuinely named Black, not the black instance of Fraunces.
     const weightCorroborates = (value: number) =>
-        declaredWeight.isRange
-            ? value >= declaredWeight.min && value <= declaredWeight.max
-            : value === declaredWeight.min;
+        !declaredWeight.isRange && value === declaredWeight.min;
 
     let current = family.trim();
 
@@ -136,7 +152,11 @@ export function stripRedundantDescriptorSuffix(
         let next: string | null = null;
 
         for (const [token, value] of STYLE_TOKEN_ENTRIES) {
-            if (lower.endsWith(token) && declaredStyle === value) {
+            if (
+                lower.endsWith(token) &&
+                declaredStyle === value &&
+                tokenStartsAtBoundary(current, token.length)
+            ) {
                 next = current.slice(0, current.length - token.length);
                 break;
             }
@@ -144,7 +164,11 @@ export function stripRedundantDescriptorSuffix(
 
         if (next === null) {
             for (const [token, value] of WEIGHT_TOKEN_ENTRIES) {
-                if (lower.endsWith(token) && weightCorroborates(value)) {
+                if (
+                    lower.endsWith(token) &&
+                    weightCorroborates(value) &&
+                    tokenStartsAtBoundary(current, token.length)
+                ) {
                     next = current.slice(0, current.length - token.length);
                     break;
                 }
@@ -152,8 +176,12 @@ export function stripRedundantDescriptorSuffix(
         }
 
         if (next === null) {
-            const numericSuffix = lower.match(/(\d{3})$/);
-            if (numericSuffix && weightCorroborates(Number(numericSuffix[1]))) {
+            const numericSuffix = lower.match(/(?:^|\D)(\d{3})$/);
+            if (
+                numericSuffix &&
+                weightCorroborates(Number(numericSuffix[1])) &&
+                tokenStartsAtBoundary(current, numericSuffix[1].length)
+            ) {
                 next = current.slice(0, current.length - numericSuffix[1].length);
             }
         }
@@ -195,7 +223,7 @@ export function inferDescriptorsFromFileName(fileBase: string): {
 
         if (style === null) {
             for (const [token, value] of STYLE_TOKEN_ENTRIES) {
-                if (lower.endsWith(token)) {
+                if (lower.endsWith(token) && tokenStartsAtBoundary(current, token.length)) {
                     style = value;
                     next = current.slice(0, current.length - token.length);
                     break;
@@ -205,7 +233,7 @@ export function inferDescriptorsFromFileName(fileBase: string): {
 
         if (next === null && weight === null) {
             for (const [token, value] of WEIGHT_TOKEN_ENTRIES) {
-                if (lower.endsWith(token)) {
+                if (lower.endsWith(token) && tokenStartsAtBoundary(current, token.length)) {
                     weight = value;
                     next = current.slice(0, current.length - token.length);
                     break;
@@ -269,25 +297,83 @@ function variantSortKey(a: FontVariant, b: FontVariant): number {
 /**
  * Groups raw faces into families.
  *
- * Order of operations matters: identical URLs collapse first (so a preload hint
- * yields to the real `@font-face` that describes the same file), then faces are
- * keyed by family, then duplicate weight/style/url triples inside a family are
- * dropped.
+ * Order of operations matters: preload guesses yield to any `@font-face` that
+ * declares the same file, spellings that differ only in separators unify when
+ * they share a file, then faces are keyed by family and duplicate
+ * weight/style/url triples inside a family are dropped.
  */
 export function groupFontFaces(faces: RawFontFace[]): FontFamily[] {
-    // 1. One record per resolved URL, preferring declared data over preload guesses.
-    const byUrl = new Map<string, RawFontFace>();
+    // 1. A preload hint describes a file, not a face: drop it whenever any
+    //    @font-face declares the same URL, and keep at most one guess per URL
+    //    otherwise. Declared faces all survive - a stylesheet may legitimately
+    //    reuse one file across several weight/style/family declarations.
+    const declaredUrls = new Set<string>();
+    for (const face of faces) {
+        if (face.url && (face.provenance || 'declared') === 'declared') {
+            declaredUrls.add(face.url);
+        }
+    }
+    const kept: RawFontFace[] = [];
+    const seenPreloadUrls = new Set<string>();
     for (const face of faces) {
         if (!face.url) continue;
-        const existing = byUrl.get(face.url);
-        if (!existing) {
-            byUrl.set(face.url, face);
-            continue;
+        if ((face.provenance || 'declared') === 'preload') {
+            if (declaredUrls.has(face.url) || seenPreloadUrls.has(face.url)) continue;
+            seenPreloadUrls.add(face.url);
         }
-        const existingIsGuess = (existing.provenance || 'declared') === 'preload';
-        const incomingIsGuess = (face.provenance || 'declared') === 'preload';
-        if (existingIsGuess && !incomingIsGuess) {
-            byUrl.set(face.url, face);
+        kept.push(face);
+    }
+
+    interface KeyedFace {
+        face: RawFontFace;
+        displayFamily: string;
+        key: string;
+        weight: string;
+        style: string;
+    }
+
+    const keyedFaces: KeyedFace[] = [];
+    for (const face of kept) {
+        const rawFamily = normalizeFamilyName(face.family || '') || 'Unknown Font';
+        const weight = (face.weight || '400').trim() || '400';
+        const style = normalizeStyleValue(face.style);
+        const displayFamily = stripRedundantDescriptorSuffix(rawFamily, weight, style);
+        const key = canonicalize(displayFamily);
+        if (!key) continue;
+        keyedFaces.push({ face, displayFamily, key, weight, style });
+    }
+
+    // 2. The same file declared with the same weight and style under two names
+    //    is one family under two spellings ("InterVariable" / "Inter var"), not
+    //    two families. Only an otherwise-identical declaration proves the
+    //    aliasing - families that share a file but declare different
+    //    descriptors (Font Awesome's v4-compat pattern) stay separate, as do
+    //    similar names that never share a file (Inter Display vs InterDisplay).
+    const alias = new Map<string, string>();
+    const resolveKey = (key: string): string => {
+        while (alias.has(key)) key = alias.get(key)!;
+        return key;
+    };
+    const keysByDeclaration = new Map<string, Set<string>>();
+    for (const { face, key, weight, style } of keyedFaces) {
+        const declaration = `${face.url}|${weight}|${style}`;
+        let keys = keysByDeclaration.get(declaration);
+        if (!keys) {
+            keys = new Set();
+            keysByDeclaration.set(declaration, keys);
+        }
+        keys.add(key);
+    }
+    for (const keys of keysByDeclaration.values()) {
+        if (keys.size < 2) continue;
+        let root: string | null = null;
+        for (const key of keys) {
+            const resolved = resolveKey(key);
+            if (root === null) {
+                root = resolved;
+            } else if (resolved !== resolveKey(root)) {
+                alias.set(resolved, resolveKey(root));
+            }
         }
     }
 
@@ -300,24 +386,18 @@ export function groupFontFaces(faces: RawFontFace[]): FontFamily[] {
 
     const buckets = new Map<string, Bucket>();
 
-    for (const face of byUrl.values()) {
-        const rawFamily = normalizeFamilyName(face.family || '') || 'Unknown Font';
-        const weight = (face.weight || '400').trim() || '400';
-        const style = normalizeStyleValue(face.style);
+    for (const { face, displayFamily, key, weight, style } of keyedFaces) {
+        const bucketKey = resolveKey(key);
 
-        const displayFamily = stripRedundantDescriptorSuffix(rawFamily, weight, style);
-        const key = canonicalize(displayFamily);
-        if (!key) continue;
-
-        let bucket = buckets.get(key);
+        let bucket = buckets.get(bucketKey);
         if (!bucket) {
-            bucket = { key, displayCounts: new Map(), variants: [], seenVariants: new Set() };
-            buckets.set(key, bucket);
+            bucket = { key: bucketKey, displayCounts: new Map(), variants: [], seenVariants: new Set() };
+            buckets.set(bucketKey, bucket);
         }
 
         bucket.displayCounts.set(displayFamily, (bucket.displayCounts.get(displayFamily) || 0) + 1);
 
-        // 2. Drop repeats of the same weight/style/file inside the family.
+        // 3. Drop repeats of the same weight/style/file inside the family.
         const variantKey = `${weight}|${style}|${face.url}`;
         if (bucket.seenVariants.has(variantKey)) continue;
         bucket.seenVariants.add(variantKey);
