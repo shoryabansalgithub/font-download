@@ -7,7 +7,12 @@
  * for vitest later is mechanical: each `check(...)` becomes an `expect`.
  */
 
-import { groupFontFaces, type RawFontFace } from '../app/lib/font-grouping';
+import {
+    groupFontFaces,
+    inferDescriptorsFromFileName,
+    stripRedundantDescriptorSuffix,
+    type RawFontFace,
+} from '../app/lib/font-grouping';
 
 let passed = 0;
 const failures: string[] = [];
@@ -163,6 +168,71 @@ console.log('\nAn italic-only family still gets a representative');
 {
     const groups = groupFontFaces([face('Foo', '400', 'italic', 'https://x/a.woff2')]);
     check('representative', groups[0].representative.style, 'italic');
+}
+
+console.log('\nA file reused across several declared faces keeps every face');
+{
+    // A variable file declared once per weight, plus an italic, all one URL.
+    const groups = groupFontFaces([
+        face('Aeonik', '400', 'normal', 'https://x/aeonik-var.woff2'),
+        face('Aeonik', '700', 'normal', 'https://x/aeonik-var.woff2'),
+        face('Aeonik', '400', 'italic', 'https://x/aeonik-var.woff2'),
+    ]);
+    check('one family', groups.length, 1);
+    check('keeps every declared face', groups[0].variants.length, 3);
+    check(
+        'weights and styles survive',
+        groups[0].variants.map((v) => `${v.weight}/${v.style}`),
+        ['400/normal', '400/italic', '700/normal']
+    );
+}
+
+console.log('\nTwo genuinely different families sharing a file both appear');
+{
+    // Font Awesome's v4-compat pattern: two family names for one file.
+    const groups = groupFontFaces([
+        face('Font Awesome 6 Free', '900', 'normal', 'https://x/fa-solid-900.woff2'),
+        face('FontAwesome', '400', 'normal', 'https://x/fa-solid-900.woff2'),
+    ]);
+    check('families', groups.map((g) => g.family), ['Font Awesome 6 Free', 'FontAwesome']);
+}
+
+console.log('\nIdentical declarations under two names are one family, two spellings');
+{
+    // rsms.me and linear.app both declare a legacy alias ("Inter var",
+    // "Inter Variable") next to "InterVariable" for the very same files.
+    const groups = groupFontFaces([
+        face('InterVariable', '100 900', 'normal', 'https://x/InterVariable.woff2'),
+        face('Inter var', '100 900', 'normal', 'https://x/InterVariable.woff2'),
+        face('InterVariable', '100 900', 'italic', 'https://x/InterVariable-Italic.woff2'),
+        face('Inter var', '100 900', 'italic', 'https://x/InterVariable-Italic.woff2'),
+    ]);
+    check('one family', groups.length, 1);
+    check('one variant per weight/style/file', groups[0].variants.length, 2);
+}
+
+console.log('\nA weight range never corroborates a name suffix');
+{
+    // "Fraunces Black" is a family named Black, not the 900 instance of Fraunces.
+    const groups = groupFontFaces([
+        face('Fraunces', '100 900', 'normal', 'https://x/fraunces.woff2'),
+        face('Fraunces Black', '100 900', 'normal', 'https://x/fraunces-black.woff2'),
+    ]);
+    check('families', groups.map((g) => g.family), ['Fraunces', 'Fraunces Black']);
+}
+
+console.log('\nSuffix stripping requires a word boundary');
+{
+    check('Highlight at 300 keeps its name', stripRedundantDescriptorSuffix('Highlight', '300', 'normal'), 'Highlight');
+    check('Limelight at 300 keeps its name', stripRedundantDescriptorSuffix('Limelight', '300', 'normal'), 'Limelight');
+    check('camelCase still strips', stripRedundantDescriptorSuffix('InterBold', '700', 'normal'), 'Inter');
+    check('digit run still strips', stripRedundantDescriptorSuffix('Inter700', '700', 'normal'), 'Inter');
+    check('longer number is not a weight', stripRedundantDescriptorSuffix('Foo 1700', '700', 'normal'), 'Foo 1700');
+    check('filename inference honours boundaries', inferDescriptorsFromFileName('Highlight'), {
+        family: 'Highlight',
+        weight: '400',
+        style: 'normal',
+    });
 }
 
 console.log('\nNo faces means no families, which drives the empty state');
