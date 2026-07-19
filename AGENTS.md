@@ -24,6 +24,11 @@ Sharp edges when touching font rendering:
 - Preloaded fonts (`<link rel=preload as=font>`) carry no weight/style/family,
   so those values are guessed from the filename and tagged `provenance:
   'preload'`. A real `@font-face` for the same URL always wins.
+- Real stylesheets reuse one font URL across several `@font-face` declarations
+  (a variable file declared per weight, Font Awesome's v4-compat second family,
+  legacy alias names like `Inter var` next to `InterVariable` on rsms.me and
+  linear.app). Never de-duplicate faces on URL alone; the rules for what merges
+  vs stays separate are documented and tested in `app/lib/font-grouping.ts`.
 
 ## Validation
 
