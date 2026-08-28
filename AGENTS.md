@@ -30,6 +30,19 @@ Sharp edges when touching font rendering:
   linear.app). Never de-duplicate faces on URL alone; the rules for what merges
   vs stays separate are documented and tested in `app/lib/font-grouping.ts`.
 
+## Design language
+
+Both screens live in one "CRT" world: the landing hero is a photographed blue
+terminal (`public/crt-hero.jpg`, overlay positioned by percentages traced from
+the photo in `HeroSection.tsx`), and the scan screen is styled as the inside of
+that machine. The shared vocabulary is in `globals.css` under the `.crt-*`
+classes - engraved text (chrome carved into the case), phosphor text (content
+the screen displays), keycap buttons, slot inputs - plus a `.scan-page` block
+that re-points the `--scan-*` token set to the blue palette. Stacking gotcha
+for the wordmark engraving: a `background-clip: text` fill paints in the
+background layer, *underneath* negative-z pseudo-elements, which is why each
+hero letter nests a `.crt-letter-fill` span for the gradient.
+
 ## Validation
 
 `npm test` covers the family grouping rules. There is no test framework: it is a

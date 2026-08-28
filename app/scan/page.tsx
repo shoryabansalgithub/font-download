@@ -66,93 +66,11 @@ function hasVariable(families: FontFamily[]): boolean {
   );
 }
 
-/* ── The measurement apparatus ──────────────────────────────────────────
-   The landing page draws a dashed frame with corner registration marks
-   around its "Aa". That frame is this product's one visual atom, so the
-   results screen reuses it: holding a specimen while scanning, standing
-   empty when a site has no webfonts, and broken when the scan failed. */
-
-function RegistrationFrame({
-  tone,
-  children,
-}: {
-  tone: 'scanning' | 'empty' | 'error';
-  children?: React.ReactNode;
-}) {
-  const markColor =
-    tone === 'error'
-      ? 'var(--danger)'
-      : tone === 'empty'
-        ? 'var(--scan-ink-5)'
-        : 'var(--scan-accent)';
-  const frameColor =
-    tone === 'error'
-      ? 'color-mix(in srgb, var(--danger) 32%, transparent)'
-      : tone === 'empty'
-        ? 'color-mix(in srgb, var(--scan-ink-5) 42%, transparent)'
-        : 'color-mix(in srgb, var(--scan-accent) 32%, transparent)';
-
-  // The scanning frame holds a full specimen line; the outcome frames hold a
-  // fragment or nothing, and at the same width the empty one read as a
-  // placeholder box rather than a diagram.
-  const width = tone === 'scanning' ? 'max-w-[560px]' : 'max-w-[420px]';
-
-  return (
-    <div className={`relative mx-auto w-full ${width} px-3`}>
-      <div
-        className="relative flex min-h-[112px] items-center justify-center px-6 py-6 md:min-h-[136px]"
-        style={{
-          border: `1.5px dashed ${frameColor}`,
-          // The error frame is severed on its right edge: the measurement stopped
-          // partway, and the gap says so before any copy is read.
-          borderRightColor: tone === 'error' ? 'transparent' : frameColor,
-        }}
-      >
-        {/* Corner registration marks */}
-        {(
-          [
-            ['-top-[5px] -left-[5px]', 'tl'],
-            ['-top-[5px] -right-[5px]', 'tr'],
-            ['-bottom-[5px] -left-[5px]', 'bl'],
-            ['-bottom-[5px] -right-[5px]', 'br'],
-          ] as const
-        ).map(([position, id]) => (
-          <span
-            key={id}
-            aria-hidden
-            className={`absolute ${position} size-[9px] bg-white`}
-            style={{ border: `1.75px solid ${markColor}` }}
-          />
-        ))}
-
-        {/* Baseline: solid where type sits, absent where it doesn't. */}
-        <span
-          aria-hidden
-          className="absolute inset-x-0 bottom-[26px] h-px"
-          style={{
-            background:
-              tone === 'empty'
-                ? `repeating-linear-gradient(90deg, ${frameColor} 0 4px, transparent 4px 8px)`
-                : frameColor,
-          }}
-        />
-
-        <div className="relative w-full text-center">{children}</div>
-      </div>
-
-      {/* Names only the rule actually drawn. The earlier caption promised
-          x-height and cap lines that were never rendered. */}
-      <p className="mt-2.5 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--scan-ink-4)]">
-        {tone === 'error' ? 'measurement interrupted' : 'baseline'}
-      </p>
-    </div>
-  );
-}
-
 /* ── Waiting ────────────────────────────────────────────────────────────
    The scan is one request with no progress events, so any percentage or
    step list here would be invented. What is true is that we are looking at
-   type - so the wait is spent showing type, one real face at a time. */
+   type - so the wait is spent showing type on the glass, one real face at
+   a time, with a block cursor holding the machine's place. */
 
 function ScanningPanel({
   host,
@@ -182,9 +100,9 @@ function ScanningPanel({
     <section
       aria-live="polite"
       aria-busy="true"
-      className="panel flex flex-col items-center justify-center gap-6 px-5 py-10 md:py-14"
+      className="panel flex flex-col items-center justify-center gap-8 px-5 py-14 md:py-20"
     >
-      <RegistrationFrame tone="scanning">
+      <div className="flex w-full max-w-[640px] items-baseline justify-center gap-3 px-3 text-[34px] md:text-[44px]">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={face.name}
@@ -192,27 +110,28 @@ function ScanningPanel({
             animate={{ opacity: 1 }}
             exit={reducedMotion ? undefined : { opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="block truncate text-[34px] leading-[1.1] tracking-[-0.02em] text-[var(--scan-specimen)] md:text-[44px]"
+            className="crt-phosphor block min-w-0 truncate leading-[1.15] tracking-[-0.01em]"
             style={{ fontFamily: face.stack }}
           >
             Sphinx of black quartz
           </motion.span>
         </AnimatePresence>
-      </RegistrationFrame>
+        <span aria-hidden className="crt-cursor shrink-0 self-center" />
+      </div>
 
-      <div className="flex flex-col items-center gap-1.5 text-center">
-        <p className="text-[15px] font-medium text-[var(--scan-ink-2)]">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <p className="font-[family-name:var(--font-jetbrains-mono)] text-[12px] uppercase tracking-[0.16em] text-[var(--scan-ink-2)]">
           Reading stylesheets on{' '}
-          <span className="font-mono text-[14px] text-[var(--scan-ink-1)]">{host || 'the page'}</span>
+          <span className="text-[var(--scan-ink-1)]">{host || 'the page'}</span>
         </p>
-        <p className="numeric font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--scan-ink-4)]">
+        <p className="numeric font-[family-name:var(--font-jetbrains-mono)] text-[11px] uppercase tracking-[0.14em] text-[var(--scan-ink-4)]">
           {seconds < 1 ? 'starting' : `${seconds}s elapsed`}
         </p>
       </div>
 
       {elapsedMs >= 12000 && (
         <div className="flex flex-col items-center gap-2.5 text-center">
-          <p className="max-w-[380px] text-[13px] text-[#6b7f98]">
+          <p className="max-w-[380px] text-[13px] text-[var(--scan-ink-4)]">
             {elapsedMs >= 60000
               ? 'This site is taking unusually long. It may be blocking automated requests.'
               : 'Large sites can take up to a minute - their stylesheets often import others.'}
@@ -221,7 +140,7 @@ function ScanningPanel({
             <button
               type="button"
               onClick={onCancel}
-              className="scan-focusable rounded-full border border-[var(--scan-line-1)] bg-white px-5 py-2 text-[13px] font-semibold text-[var(--scan-ink-2)] transition-colors duration-[140ms] hover:border-[#bccde4] hover:text-[var(--scan-ink-1)]"
+              className="scan-focusable rounded-full border border-[var(--scan-line-1)] bg-transparent px-5 py-2 text-[13px] font-semibold text-[var(--scan-ink-2)] transition-colors duration-[140ms] hover:border-[rgba(214,229,255,0.5)] hover:text-[var(--scan-ink-1)]"
             >
               Stop and scan another site
             </button>
@@ -256,27 +175,30 @@ function OutcomePanel({
       initial={reducedMotion ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="panel flex flex-col items-center justify-center gap-6 px-5 py-10 text-center md:py-14"
+      className="panel flex flex-col items-center justify-center gap-7 px-5 py-14 text-center md:py-20"
     >
-      <RegistrationFrame tone={tone}>
+      {/* The readout the machine was left holding: a specimen cut off
+          mid-word for a failed scan, a bare cursor for an empty one. */}
+      <div className="flex items-baseline justify-center gap-3 text-[34px] md:text-[44px]">
         {tone === 'error' ? (
           <span
             aria-hidden
-            className="block text-[34px] leading-[1.1] tracking-[-0.02em] text-[var(--danger)] opacity-45 md:text-[44px]"
+            className="block leading-[1.15] tracking-[-0.01em] text-[var(--danger)] opacity-70"
             style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}
           >
             Sphinx of bla
           </span>
         ) : (
-          <span className="sr-only">No glyphs were found on the baseline.</span>
+          <span className="sr-only">No glyphs were found.</span>
         )}
-      </RegistrationFrame>
+        <span aria-hidden className="crt-cursor shrink-0 self-center opacity-60" />
+      </div>
 
       <div className="flex max-w-[440px] flex-col items-center gap-2">
         <h2
           ref={headingRef}
           tabIndex={-1}
-          className="text-[20px] font-semibold tracking-[-0.015em] text-[var(--scan-ink-1)] outline-none md:text-[22px]"
+          className="crt-phosphor text-[20px] font-semibold tracking-[-0.015em] outline-none md:text-[22px]"
         >
           {title}
         </h2>
@@ -287,14 +209,14 @@ function OutcomePanel({
         <button
           type="button"
           onClick={primary.onClick}
-          className="scan-focusable rounded-full bg-[var(--scan-accent)] px-6 py-2.5 text-[13.5px] font-semibold text-white transition-[background-color,box-shadow] duration-[140ms] hover:bg-[var(--scan-accent-deep)] hover:shadow-[0_6px_18px_-8px_rgba(29,98,221,0.55)] active:scale-[0.98]"
+          className="scan-focusable crt-key px-6 py-2.5 text-[13.5px] font-semibold text-[#16309E] transition-[filter] duration-[140ms] hover:brightness-105 active:scale-[0.98]"
         >
           {primary.label}
         </button>
         <button
           type="button"
           onClick={secondary.onClick}
-          className="scan-focusable rounded-full border border-[var(--scan-line-1)] bg-white px-6 py-2.5 text-[13.5px] font-semibold text-[var(--scan-ink-2)] transition-colors duration-[140ms] hover:border-[#bccde4] hover:text-[var(--scan-ink-1)] active:scale-[0.98]"
+          className="scan-focusable rounded-full border border-[var(--scan-line-1)] bg-transparent px-6 py-2.5 text-[13.5px] font-semibold text-[var(--scan-ink-2)] transition-colors duration-[140ms] hover:border-[rgba(214,229,255,0.5)] hover:text-[var(--scan-ink-1)] active:scale-[0.98]"
         >
           {secondary.label}
         </button>
@@ -321,9 +243,9 @@ function ScanBar({
     error: 'bg-[var(--danger)]',
   };
 
-  // Sentence case, not shouted caps: this is a quiet status readout, not a badge.
-  // The host is deliberately absent - the headline below already names it, and
-  // printing it twice made the two compete.
+  // Instrument voice: the bar is the machine's status line, so it speaks in
+  // the same small caps mono as every other piece of chrome. The host is
+  // deliberately absent - the headline below already names it.
   const label: Record<ExtractStatus, string> = {
     loading: 'Scanning',
     success: 'Analysis complete',
@@ -339,13 +261,13 @@ function ScanBar({
       // Sits on the page's own background rather than a slab of its own: translucent
       // so the body gradient reads straight through it, with a hairline to separate
       // it from the rows once they scroll underneath.
-      className="sticky top-0 z-50 border-b border-[rgba(215,226,241,0.65)] bg-[rgba(243,247,253,0.72)] backdrop-blur-[14px]"
+      className="sticky top-0 z-50 border-b border-[rgba(160,185,255,0.22)] bg-[rgba(14,19,130,0.55)] backdrop-blur-[14px]"
     >
       <div className="mx-auto flex h-15 w-full max-w-[1180px] items-center justify-between gap-4 px-5 py-3 md:px-8">
         <button
           type="button"
           onClick={onBack}
-          className="scan-focusable group flex h-9 items-center gap-2 rounded-full border border-[var(--scan-line-1)] bg-white/80 pl-2.5 pr-4 text-[12.5px] font-medium text-[var(--scan-ink-2)] transition-[background-color,border-color,color] duration-[140ms] hover:border-[#bccde4] hover:bg-white hover:text-[var(--scan-ink-1)] active:scale-[0.98]"
+          className="scan-focusable group crt-key flex h-9 items-center gap-2 pl-3 pr-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] font-medium uppercase tracking-[0.1em] text-[#16309E] transition-[filter] duration-[140ms] hover:brightness-105 active:translate-y-px"
         >
           <svg
             className="size-3.5 shrink-0 transition-transform duration-[140ms] group-hover:-translate-x-[2px]"
@@ -363,7 +285,7 @@ function ScanBar({
         <span
           role="status"
           aria-live="polite"
-          className="flex shrink-0 items-center gap-2 text-[12.5px] font-medium text-[var(--scan-ink-3)]"
+          className="flex shrink-0 items-center gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[10.5px] font-medium uppercase tracking-[0.14em] text-[var(--scan-ink-3)]"
         >
           <span
             aria-hidden
@@ -482,12 +404,12 @@ function ScanResults() {
 
   const host = targetHost || rawUrlParam || 'this site';
 
-  // Reads as one sentence ending in the host, so the headline stays a single
-  // line and the eye lands on the site that was scanned.
+  // The overline above the trophy: what the machine did, in its own voice.
+  // The host below it is the headline - the site is the thing that was taken.
   const headline = useMemo(() => {
     if (status === 'success') {
       const n = families.length;
-      return `${n} ${n === 1 ? 'typeface' : 'typefaces'} extracted from`;
+      return `${n} ${n === 1 ? 'typeface' : 'typefaces'} stolen from`;
     }
     if (status === 'empty') return 'No webfonts found on';
     if (status === 'error') return "Couldn't read";
@@ -511,22 +433,25 @@ function ScanResults() {
       <main className="mx-auto w-full max-w-[1180px] px-5 pt-10 md:px-8 md:pt-14">
         {/* The finding is the headline. Its position never moves between states,
             so loading -> success reads as an answer arriving, not a relayout. */}
-        <header className="mb-7 flex flex-col gap-4 md:mb-8 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            <h1 className="flex flex-wrap items-baseline gap-x-2 text-[19px] font-normal leading-[1.3] tracking-[-0.015em] md:text-[23px]">
-              <span className="text-[var(--scan-ink-2)]">{headline}</span>
-              <span className="min-w-0 truncate text-[var(--scan-ink-1)]">{host}</span>
-            </h1>
-            {/* Height is reserved in every state so the answer arriving never
-                shifts the grid underneath it. CLS on this screen must stay 0. */}
-            <p
-              className="mt-2 min-h-[16px] font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--scan-ink-4)]"
-              aria-hidden={!subline}
-            >
-              {subline || ''}
-            </p>
-          </div>
-
+        <header className="mb-8 md:mb-10">
+          <h1 className="min-w-0">
+            <span className="block font-[family-name:var(--font-jetbrains-mono)] text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--scan-ink-3)]">
+              {headline}
+            </span>
+            {/* The site's name gets the wordmark treatment: engraved into the
+                case, set in the same light serif as the hero. */}
+            <span className="crt-etched mt-1.5 block min-w-0 truncate font-[family-name:var(--font-newsreader)] text-[44px] font-light leading-[1.1] md:text-[60px]">
+              {host}
+            </span>
+          </h1>
+          {/* Height is reserved in every state so the answer arriving never
+              shifts the grid underneath it. CLS on this screen must stay 0. */}
+          <p
+            className="mt-3 min-h-[16px] font-[family-name:var(--font-jetbrains-mono)] text-[11px] uppercase tracking-[0.14em] text-[var(--scan-ink-4)]"
+            aria-hidden={!subline}
+          >
+            {subline || ''}
+          </p>
         </header>
 
         <AnimatePresence mode="wait" initial={false}>
@@ -598,7 +523,7 @@ function ScanResults() {
 function ScanSuspenseFallback() {
   return (
     <div className="scan-page min-h-screen pb-24 text-[var(--scan-ink-1)]">
-      <div className="sticky top-0 z-50 border-b border-[rgba(215,226,241,0.6)] bg-[rgba(247,250,255,0.82)] backdrop-blur-[16px]">
+      <div className="sticky top-0 z-50 border-b border-[rgba(160,185,255,0.22)] bg-[rgba(14,19,130,0.55)] backdrop-blur-[16px]">
         <div className="mx-auto flex h-15 w-full max-w-[1180px] items-center justify-between px-5 py-3.5 md:px-8">
           <div className="scan-shimmer h-4 w-24 rounded" />
           <div className="scan-shimmer h-4 w-32 rounded" />
