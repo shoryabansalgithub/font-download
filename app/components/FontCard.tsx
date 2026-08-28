@@ -519,12 +519,19 @@ export default function FontCard({
       initial={reducedMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1], delay: staggerDelay }}
-      className="specimen-card group relative flex flex-col rounded-[20px] border border-[var(--scan-line-2)] bg-white transition-[border-color,box-shadow] duration-[160ms]"
+      className="group relative flex flex-col transition-colors duration-[160ms] hover:bg-[rgba(220,235,255,0.035)]"
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
     >
       {/* Masthead: the family names itself, in itself. */}
       <header className="flex items-start justify-between gap-5 px-6 pt-5 md:px-9 md:pt-7">
         <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3.5 gap-y-1">
+          {/* Catalogue index: the rows are entries in one specimen book. */}
+          <span
+            aria-hidden
+            className="numeric font-[family-name:var(--font-jetbrains-mono)] text-[11px] tracking-[0.12em] text-[var(--scan-ink-5)]"
+          >
+            {String(index + 1).padStart(2, '0')}
+          </span>
           <h3
             title={fontFamily.family}
             className="min-w-0 max-w-full truncate text-[20px] leading-[1.2] text-[var(--scan-ink-1)] md:text-[23px]"
@@ -536,7 +543,7 @@ export default function FontCard({
           >
             {fontFamily.family}
           </h3>
-          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 font-mono text-[10.5px] uppercase tracking-[0.09em] text-[var(--scan-ink-4)]">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 font-[family-name:var(--font-jetbrains-mono)] text-[10.5px] uppercase tracking-[0.09em] text-[var(--scan-ink-4)]">
             {metaParts.map((part, i) => (
               <span key={part} className="flex items-center gap-1.5">
                 {i > 0 && <span aria-hidden className="text-[var(--scan-line-1)]">/</span>}
@@ -556,18 +563,18 @@ export default function FontCard({
               ? `Download ${fontFamily.family} ${weightName(activeWeight)}${italic ? ' Italic' : ''}`
               : 'Download unavailable'
           }
-          className={`scan-focusable flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[12.5px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-[140ms] active:scale-[0.97] disabled:cursor-not-allowed ${
+          className={`scan-focusable flex h-9 shrink-0 items-center gap-1.5 rounded-[3px] border px-3.5 text-[12.5px] font-semibold transition-[background-color,border-color,color,box-shadow,filter] duration-[140ms] active:scale-[0.97] disabled:cursor-not-allowed ${
             !canDownload
-              ? 'border-[var(--scan-line-1)] bg-white text-[var(--scan-ink-4)] opacity-70'
+              ? 'border-[var(--scan-line-1)] bg-transparent text-[var(--scan-ink-4)] opacity-70'
               : downloadState === 'success'
-                ? 'border-[#a7e3c9] bg-[#eafaf3] text-[var(--success)]'
+                ? 'border-[#a7e3c9] bg-[#eafaf3] text-[#0f7a52]'
                 : downloadState === 'error'
-                  ? 'border-[#f4c3c7] bg-[#fdf1f2] text-[var(--danger)]'
+                  ? 'border-[#f4c3c7] bg-[#fdf1f2] text-[#b2364a]'
                   : downloadState === 'loading'
-                    ? 'border-[var(--scan-accent)] bg-[var(--scan-accent)] text-white'
+                    ? 'crt-key border-transparent text-[#16309E]'
                     : // Two-stage affordance: the row lighting up offers the action,
-                      // hovering the button itself commits to it.
-                      'border-[var(--scan-line-1)] bg-white text-[var(--scan-ink-2)] group-hover:border-[var(--scan-accent)] group-hover:bg-[var(--scan-accent)] group-hover:text-white hover:!border-[var(--scan-accent-deep)] hover:!bg-[var(--scan-accent-deep)] hover:!text-white'
+                      // hovering the keycap itself commits to it.
+                      'crt-key border-transparent text-[#16309E] group-hover:brightness-[1.04] hover:!brightness-110'
           }`}
         >
           {downloadState === 'loading' ? (
@@ -651,7 +658,7 @@ export default function FontCard({
         />
 
         {previewState === 'fail' && (
-          <span className="absolute right-6 top-2 rounded-full bg-[#fdf1f2] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--danger)] md:right-9">
+          <span className="absolute right-6 top-2 rounded-full bg-[rgba(255,169,184,0.16)] px-2 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--danger)] md:right-9">
             Preview blocked
           </span>
         )}
@@ -682,7 +689,7 @@ export default function FontCard({
                     title={`${weightName(step.weight)} ${step.weight}${step.interpolated ? ' (variable)' : ''}`}
                     className={`scan-focusable numeric rounded-md px-2 py-1 text-[12.5px] leading-none tabular-nums transition-[background-color,color] duration-[120ms] ${
                       active
-                        ? 'bg-[var(--scan-accent)] text-white'
+                        ? 'bg-[var(--scan-accent)] text-[#16309E]'
                         : 'hover:bg-[var(--scan-wash)] hover:text-[var(--scan-ink-1)]'
                     }`}
                     style={{
@@ -712,7 +719,7 @@ export default function FontCard({
                   title={italic ? 'Show upright' : 'Show italic'}
                   className={`scan-focusable ml-1.5 rounded-md px-2 py-1 text-[12.5px] italic leading-none transition-[background-color,color] duration-[120ms] ${
                     italic
-                      ? 'bg-[var(--scan-accent)] text-white'
+                      ? 'bg-[var(--scan-accent)] text-[#16309E]'
                       : 'text-[var(--scan-ink-3)] hover:bg-[var(--scan-wash)] hover:text-[var(--scan-ink-1)]'
                   }`}
                 >
@@ -753,7 +760,7 @@ export default function FontCard({
           )}
           {altButtonLabel}
           {alternatives.length > 0 && altState === 'ready' && !showAlternatives && (
-            <span className="numeric rounded-full bg-[var(--brand-soft)] px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums text-[var(--scan-accent)]">
+            <span className="numeric rounded-full bg-[rgba(220,235,255,0.14)] px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums text-[var(--scan-accent)]">
               {alternatives.length}
             </span>
           )}
@@ -775,7 +782,7 @@ export default function FontCard({
             transition={{ duration: reducedMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t border-[var(--scan-line-3)] bg-[#fafcff] px-6 py-4 md:px-9">
+            <div className="border-t border-[var(--scan-line-3)] bg-[rgba(4,8,70,0.35)] px-6 py-4 md:px-9">
               {altState === 'ready' && alternatives.length > 0 && (
                 <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                   {alternatives.map((alt, altIndex) => (
@@ -784,7 +791,7 @@ export default function FontCard({
                         href={alt.downloadUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="scan-focusable flex h-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors duration-[120ms] hover:border-[#dbe7f8] hover:bg-white"
+                        className="scan-focusable flex h-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors duration-[120ms] hover:border-[rgba(214,229,255,0.22)] hover:bg-[rgba(220,235,255,0.07)]"
                       >
                         <span className="min-w-0">
                           <span className="block truncate text-[13px] font-semibold text-[var(--scan-ink-1)]">

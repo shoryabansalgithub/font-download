@@ -18,11 +18,12 @@ function stableFamilyKey(fontFamily: FontFamily, index: number): string {
 export default function FontGrid({ families, previewText, onPreviewTextChange }: FontGridProps) {
   if (families.length === 0) return null;
 
-  // A stack of full-measure rows, not a grid of tiles. A typeface is judged on a
-  // line of text at size; a half- or quarter-width column chops the specimen into
-  // ragged fragments and shrinks the one thing the user came to look at.
+  // One pane of screen glass holding every family as a numbered catalogue row,
+  // divided by hairlines - not a tray of floating cards. Full-measure rows
+  // because a typeface is judged on a line of text at size; a half-width
+  // column chops the specimen into ragged fragments.
   return (
-    <div className="flex flex-col gap-4">
+    <section className="panel divide-y divide-[rgba(214,229,255,0.12)] overflow-hidden">
       {families.map((fontFamily, index) => {
         const key = stableFamilyKey(fontFamily, index);
         return (
@@ -36,6 +37,6 @@ export default function FontGrid({ families, previewText, onPreviewTextChange }:
           />
         );
       })}
-    </div>
+    </section>
   );
 }
