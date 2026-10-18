@@ -1,4 +1,14 @@
-/** One concrete `@font-face`: a single weight x style backed by a single file. */
+export interface FontSubset {
+    url: string;
+    format: string;
+    unicodeRange: string;
+}
+
+/**
+ * One concrete face: a single weight x style. Usually one file; when the site
+ * splits the face by `unicode-range`, `subsets` lists every file and `url` is
+ * the one covering Latin.
+ */
 export interface FontVariant {
     name: string;
     format: string;
@@ -6,6 +16,7 @@ export interface FontVariant {
     weight: string;
     style: string;
     referer?: string;
+    subsets?: FontSubset[];
 }
 
 /**

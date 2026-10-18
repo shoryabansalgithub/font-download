@@ -22,6 +22,7 @@ export interface RawFontFace {
     url: string;
     weight?: string;
     style?: string;
+    unicodeRange?: string;
     referer?: string;
     provenance?: FontProvenance;
 }
@@ -256,6 +257,47 @@ export function inferDescriptorsFromFileName(fileBase: string): {
     };
 }
 
+function unicodeSpans(range: string): [number, number][] {
+    return range.split(',').flatMap((token): [number, number][] => {
+        const match = token.trim().match(/^U\+([0-9A-F?]{1,6})(?:-([0-9A-F]{1,6}))?$/i);
+        if (!match) return [];
+        const [, start, end] = match;
+        if (start.includes('?')) {
+            return [[parseInt(start.replace(/\?/g, '0'), 16), parseInt(start.replace(/\?/g, 'F'), 16)]];
+        }
+        return [[parseInt(start, 16), parseInt(end ?? start, 16)]];
+    });
+}
+
+const covers = (range: string, codePoint: number) =>
+    unicodeSpans(range).some(([start, end]) => start <= codePoint && codePoint <= end);
+
+/**
+ * `undefined` when the face covers every code point: no descriptor, or the
+ * `U+0-10FFFF` default that `document.fonts` reports for every face.
+ */
+function subsetRange(range: string | undefined): string | undefined {
+    const value = (range || '').replace(/\s+/g, '').toUpperCase();
+    if (!value) return undefined;
+    const whole = unicodeSpans(value).some(([start, end]) => start === 0 && end >= 0x10ffff);
+    return whole ? undefined : value;
+}
+
+function withLatinPrimary(variant: FontVariant): FontVariant {
+    const { subsets, ...face } = variant;
+    if (!subsets || subsets.length < 2) return face;
+    const latin = subsets.findIndex((subset) => covers(subset.unicodeRange, 'A'.charCodeAt(0)));
+    const ordered = latin > 0 ? [subsets[latin], ...subsets.filter((_, i) => i !== latin)] : subsets;
+    const primary = ordered[0];
+    return {
+        ...face,
+        name: primary.url.split('/').pop()?.split('?')[0] || face.name,
+        url: primary.url,
+        format: primary.format,
+        subsets: ordered,
+    };
+}
+
 function formatRank(format: string): number {
     const index = FORMAT_PREFERENCE.indexOf((format || '').toUpperCase());
     return index === -1 ? FORMAT_PREFERENCE.length : index;
@@ -380,8 +422,7 @@ export function groupFontFaces(faces: RawFontFace[]): FontFamily[] {
     interface Bucket {
         key: string;
         displayCounts: Map<string, number>;
-        variants: FontVariant[];
-        seenVariants: Set<string>;
+        variants: Map<string, FontVariant>;
     }
 
     const buckets = new Map<string, Bucket>();
@@ -391,31 +432,41 @@ export function groupFontFaces(faces: RawFontFace[]): FontFamily[] {
 
         let bucket = buckets.get(bucketKey);
         if (!bucket) {
-            bucket = { key: bucketKey, displayCounts: new Map(), variants: [], seenVariants: new Set() };
+            bucket = { key: bucketKey, displayCounts: new Map(), variants: new Map() };
             buckets.set(bucketKey, bucket);
         }
 
         bucket.displayCounts.set(displayFamily, (bucket.displayCounts.get(displayFamily) || 0) + 1);
 
-        // 3. Drop repeats of the same weight/style/file inside the family.
-        const variantKey = `${weight}|${style}|${face.url}`;
-        if (bucket.seenVariants.has(variantKey)) continue;
-        bucket.seenVariants.add(variantKey);
+        // 3. Drop repeats of the same weight/style/file inside the family. A
+        //    unicode-range subset is one file of a face, not a face: every
+        //    subset of a weight/style joins one variant. A file covering the
+        //    whole range is a complete face of its own.
+        const unicodeRange = subsetRange(face.unicodeRange);
+        const variantKey = `${weight}|${style}|${unicodeRange ? 'subsets' : face.url}`;
+        const existing = bucket.variants.get(variantKey);
+        if (existing) {
+            if (unicodeRange && !existing.subsets?.some((subset) => subset.url === face.url)) {
+                existing.subsets?.push({ url: face.url, format: face.format, unicodeRange });
+            }
+            continue;
+        }
 
-        bucket.variants.push({
+        bucket.variants.set(variantKey, {
             name: face.name,
             format: face.format,
             url: face.url,
             weight,
             style,
             referer: face.referer,
+            ...(unicodeRange && { subsets: [{ url: face.url, format: face.format, unicodeRange }] }),
         });
     }
 
     const families: FontFamily[] = [];
 
     for (const bucket of buckets.values()) {
-        if (bucket.variants.length === 0) continue;
+        if (bucket.variants.size === 0) continue;
 
         // Prefer the spelling the site used most; break ties toward the shortest.
         const family = Array.from(bucket.displayCounts.entries()).sort((a, b) => {
@@ -424,7 +475,7 @@ export function groupFontFaces(faces: RawFontFace[]): FontFamily[] {
             return a[0].localeCompare(b[0]);
         })[0][0];
 
-        const variants = [...bucket.variants].sort(variantSortKey);
+        const variants = Array.from(bucket.variants.values(), withLatinPrimary).sort(variantSortKey);
         const representative = [...variants].sort(
             (a, b) => representativeScore(a) - representativeScore(b)
         )[0];
