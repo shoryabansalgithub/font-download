@@ -12,15 +12,16 @@ rules: a stylesheet declares one rule per weight x style, so the raw faces are
 collapsed by `app/lib/font-grouping.ts` before the response. Family matching,
 variant de-duplication and representative selection all live in that one module
 and are documented there; `app/types.ts` defines the shape. `app/scan/page.tsx`
--> `FontGrid` -> `FontCard` render it, previewing and downloading the family's
-`representative` variant.
+-> `app/components/results/` render it: every face of every family (face model
+in `app/lib/faces.ts`), with per-face, per-family and zip downloads
+(`app/lib/font-files.ts`).
 
 Sharp edges when touching font rendering:
 
 - A variable font's weight is a **range** ("100 900"). That is valid in an
   `@font-face` descriptor but invalid in a CSS `font` shorthand, so passing it
   to `document.fonts.load`/`check` throws. Use a single concrete weight for
-  rendering (see `renderableWeight` in `FontCard.tsx`).
+  rendering (see `renderWeight` in `app/lib/faces.ts`).
 - Preloaded fonts (`<link rel=preload as=font>`) carry no weight/style/family,
   so those values are guessed from the filename and tagged `provenance:
   'preload'`. A real `@font-face` for the same URL always wins.
@@ -34,11 +35,11 @@ Sharp edges when touching font rendering:
 
 Both screens live in one "CRT" world: the landing hero is a photographed blue
 terminal (`public/crt-hero.jpg`, overlay positioned by percentages traced from
-the photo in `HeroSection.tsx`), and the scan screen is styled as the inside of
-that machine. The shared vocabulary is in `globals.css` under the `.crt-*`
-classes - engraved text (chrome carved into the case), phosphor text (content
-the screen displays), keycap buttons, slot inputs - plus a `.scan-page` block
-that re-points the `--scan-*` token set to the blue palette. Stacking gotcha
+the photo in `HeroSection.tsx`), and the scan screen is what that machine prints:
+a printer casing and tractor-feed paper in the photo's sampled duotone. The
+shared vocabulary is in `globals.css` under the `.crt-*` classes (engraved
+letters, slot inputs, keycaps) and the `.results` block (paper, casing, keys,
+print motion). Stacking gotcha
 for the wordmark engraving: a `background-clip: text` fill paints in the
 background layer, *underneath* negative-z pseudo-elements, which is why each
 hero letter nests a `.crt-letter-fill` span for the gradient.
