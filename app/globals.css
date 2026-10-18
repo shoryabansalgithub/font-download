@@ -725,3 +725,33 @@ select {
 .results .key-failed {
   color: var(--stamp);
 }
+
+/* micro-spec: Fill line (form field ruled on paper)
+   form: 1px ink underline, no box, radius 0; material: ink; depth: none; behaviour: hover and
+   focus thicken the line to 2px, 120ms */
+.results .fill-line {
+  border-bottom: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  transition: box-shadow 120ms var(--ease-out);
+}
+
+.results .fill-line:hover {
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.results .fill-line:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.results .stamp {
+  padding-inline: 4px;
+  color: var(--stamp);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  transform: rotate(-2deg);
+}
