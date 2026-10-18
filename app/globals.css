@@ -425,3 +425,72 @@ select {
   );
   background-size: 200% 100%;
 }
+
+/* micro-spec: Room (the page ground)
+   role: the scene the printer stands in; form: full viewport; material: the photo's blue,
+   its grain, its grid floor; depth: the floor recedes to a horizon; behaviour: still - the
+   room never moves, only the paper and ink do; absent: vignettes, gradients that move */
+.results {
+  --room: #0430e9; /* sampled: crt-hero.jpg background */
+  --print-bleed: -8px; /* the wipe ends outside the box so it never clips a focus ring */
+  --room-ink: #ebebfb; /* 6.8:1 on --room */
+  --paper: #ebebfb; /* sampled: the CRT casing highlight in crt-hero.jpg */
+  --paper-band: #e1e4fa; /* bluebar band, one step toward the casing side #d4d8fa */
+  --ink: #0f1d8f; /* 11.2:1 on paper */
+  --ink-2: #3a4bb8; /* 6.2:1 on paper */
+  --ink-3: #4a5bc4; /* 5.0:1 on paper, 4.6:1 on a band: small meta only */
+  --stamp: #c4204a; /* the one warm mark: refusals and faults only */
+  --grain-paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.25 0 0 0 0 0.75 0 0 0 0.16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-carriage: cubic-bezier(0.3, 0, 0, 1);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.1 0 0 0 0 0.55 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  overflow-x: clip;
+  color: var(--room-ink);
+  background:
+    radial-gradient(70% 50% at 50% 0%, rgb(60 100 255 / 0.35), transparent 70%),
+    linear-gradient(180deg, var(--room) 0%, #0632ee 60%, #1440f2 100%);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-weight: 400;
+}
+
+.results::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--grain);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.results::after {
+  content: '';
+  position: fixed;
+  inset: auto -50% 0 -50%;
+  height: 46vh;
+  z-index: -1;
+  background:
+    repeating-linear-gradient(90deg, rgb(190 205 255 / 0.22) 0 1px, transparent 1px 72px),
+    repeating-linear-gradient(0deg, rgb(190 205 255 / 0.22) 0 1px, transparent 1px 72px);
+  transform: perspective(520px) rotateX(62deg);
+  transform-origin: 50% 100%;
+  mask-image: linear-gradient(to top, #000 10%, transparent 85%);
+  pointer-events: none;
+}
+
+.results ::selection {
+  background: rgb(15 29 143 / 0.18);
+}
+
+.results :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.results [tabindex='-1']:focus-visible {
+  outline: none;
+}
