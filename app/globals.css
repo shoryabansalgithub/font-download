@@ -633,3 +633,95 @@ select {
   border-block: 1px solid var(--ink);
   height: 4px;
 }
+
+/* micro-spec: Key (see DownloadButton.tsx for the full four layers)
+   form: radius 3 like the hero key; material: top-lit keycap plastic; depth: bevel, 2px skirt,
+   cast; behaviour: hover +4% light, press travels the skirt in 0ms and springs back 160ms,
+   disabled flattens to a 1px skirt */
+.results .key {
+  color: #16309e;
+  background: linear-gradient(180deg, #f3f6ff 0%, #ccdcfa 100%);
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    inset 0 -1px 0 rgb(64 92 176 / 0.25),
+    0 2px 0 #5a72c9,
+    0 3px 5px rgb(2 12 110 / 0.35);
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    filter 120ms var(--ease-out);
+}
+
+.results .key:hover {
+  filter: brightness(1.04);
+}
+
+.results .key-lg {
+  height: 40px;
+  padding-inline: 20px;
+}
+
+.results .key-sm {
+  height: 32px;
+  padding-inline: 12px;
+}
+
+.results .key-icon {
+  width: 32px;
+  height: 32px;
+}
+
+@media (pointer: coarse) {
+  .results .key-lg,
+  .results .key-sm {
+    height: 48px;
+  }
+
+  .results .key-sm {
+    padding-inline: 16px;
+  }
+
+  .results .key-icon {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+.results .crt-slot .key:focus-visible {
+  outline-color: #ebebfb;
+  outline-offset: 1px;
+}
+
+.results .key:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    inset 0 1px 3px rgb(64 92 176 / 0.35),
+    0 0 0 #5a72c9,
+    0 1px 1px rgb(2 12 110 / 0.3);
+  transition-duration: 0ms;
+}
+
+.results .key:disabled {
+  color: #4a5bc4;
+  background: #d9e0f7;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 1px 0 #9aa8dc;
+  filter: none;
+  cursor: default;
+}
+
+.results .key-primary {
+  background: linear-gradient(180deg, #eef4ff 0%, #c4d6fa 100%);
+}
+
+.results .key-stolen {
+  color: #0d5a3c;
+  background: linear-gradient(180deg, #f1fbf6 0%, #c9ecd9 100%);
+}
+
+.results .key-failed {
+  color: var(--stamp);
+}
