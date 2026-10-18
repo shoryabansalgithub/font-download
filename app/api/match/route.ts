@@ -1,407 +1,207 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import {
-  extractFeaturesFromBuffer,
-  findSimilar,
-  FontFeatureEntry,
-  FEATURE_NAMES,
-} from '../../lib/font-features';
+import { extractShapeFromBuffer, type FontShape } from '../../lib/font-features';
+import { FontMatcher, type FontDatabaseFile, type FontRecord } from '../../lib/font-matcher';
 
-// ============================================================================
-// Font feature database — loaded once, cached in module scope
-// ============================================================================
+const RESULT_COUNT = 5;
 
-let fontDatabase: FontFeatureEntry[] | null = null;
+let matcherPromise: Promise<FontMatcher | null> | null = null;
 
-async function getDatabase(): Promise<FontFeatureEntry[]> {
-  if (fontDatabase) return fontDatabase;
-
-  const dbPath = path.join(process.cwd(), 'public', 'data', 'font-features.json');
-  try {
-    const raw = await fs.readFile(dbPath, 'utf-8');
-    fontDatabase = JSON.parse(raw) as FontFeatureEntry[];
-    console.log(`Font feature database loaded: ${fontDatabase.length} fonts`);
-    return fontDatabase;
-  } catch {
-    console.error('Font feature database not found at', dbPath);
-    return [];
-  }
-}
-
-// ============================================================================
-// Well-known font name overrides (hand-curated beats algo for iconic fonts)
-// ============================================================================
-
-interface NameOverrideAlt {
-  family: string;
-  reason: string;
-}
-
-const NAME_OVERRIDES: Record<string, NameOverrideAlt[]> = {
-  'helvetica': [
-    { family: 'Inter', reason: 'Modern Helvetica successor for screens' },
-    { family: 'Roboto', reason: 'Neutral grotesque, very close letterforms' },
-    { family: 'Source Sans 3', reason: 'Clean neutral sans by Adobe' },
-    { family: 'Public Sans', reason: 'Open-source Helvetica alternative' },
-    { family: 'DM Sans', reason: 'Clean geometric-humanist hybrid' },
-  ],
-  'helvetica neue': [
-    { family: 'Inter', reason: 'Modern Helvetica successor with optical sizing' },
-    { family: 'DM Sans', reason: 'Slightly geometric, very clean' },
-    { family: 'Public Sans', reason: 'Open-source Helvetica Neue alternative' },
-    { family: 'Roboto', reason: 'Neutral grotesque, similar proportions' },
-    { family: 'Source Sans 3', reason: 'Highly readable neutral sans' },
-  ],
-  'sf pro': [
-    { family: 'Inter', reason: 'Closest free match, designed for UI like SF Pro' },
-    { family: 'DM Sans', reason: 'Clean geometric with similar x-height' },
-    { family: 'Plus Jakarta Sans', reason: 'Modern geometric display sans' },
-    { family: 'Albert Sans', reason: 'Geometric with similar rounded terminals' },
-    { family: 'Public Sans', reason: 'Neutral UI-focused sans' },
-  ],
-  'proxima nova': [
-    { family: 'Montserrat', reason: 'Known free Proxima Nova alternative' },
-    { family: 'Nunito Sans', reason: 'Similar proportions and x-height' },
-    { family: 'Poppins', reason: 'Geometric with similar character' },
-    { family: 'Raleway', reason: 'Similar geometric weight range' },
-    { family: 'Work Sans', reason: 'Grotesque-geometric hybrid' },
-  ],
-  'gotham': [
-    { family: 'Montserrat', reason: 'Made as a free Gotham alternative' },
-    { family: 'Raleway', reason: 'Similar geometric proportions' },
-    { family: 'Poppins', reason: 'Geometric with similar boldness' },
-    { family: 'Work Sans', reason: 'Wide geometric grotesque' },
-    { family: 'Plus Jakarta Sans', reason: 'Modern geometric sans' },
-  ],
-  'futura': [
-    { family: 'Jost', reason: "Directly inspired by Futura's geometry" },
-    { family: 'Poppins', reason: 'Geometric with similar round shapes' },
-    { family: 'Nunito', reason: 'Rounded geometric like Futura' },
-    { family: 'Quicksand', reason: 'Geometric rounded sans' },
-    { family: 'Montserrat', reason: 'Geometric with similar uppercase' },
-  ],
-  'avenir': [
-    { family: 'Nunito Sans', reason: 'Very close match in feel and proportions' },
-    { family: 'Nunito', reason: 'Rounded geometric like Avenir' },
-    { family: 'Poppins', reason: 'Geometric with matching warmth' },
-    { family: 'Outfit', reason: 'Modern geometric, similar feel' },
-    { family: 'Montserrat', reason: 'Geometric with similar weight range' },
-  ],
-  'circular': [
-    { family: 'DM Sans', reason: 'Very similar geometric proportions' },
-    { family: 'Plus Jakarta Sans', reason: 'Modern geometric, similar feel' },
-    { family: 'Albert Sans', reason: 'Geometric with similar roundness' },
-    { family: 'Outfit', reason: 'Clean geometric, similar character' },
-    { family: 'Inter', reason: 'Modern alternative, similar weight' },
-  ],
-  'garamond': [
-    { family: 'EB Garamond', reason: 'Direct open-source Garamond revival' },
-    { family: 'Cormorant Garamond', reason: 'Display-oriented Garamond' },
-    { family: 'Crimson Pro', reason: 'Old-style with similar elegance' },
-    { family: 'Libre Baskerville', reason: 'Classic book serif' },
-    { family: 'Lora', reason: 'Contemporary old-style serif' },
-  ],
-  'bodoni': [
-    { family: 'Playfair Display', reason: 'High-contrast display like Bodoni' },
-    { family: 'Libre Bodoni', reason: 'Direct open-source Bodoni' },
-    { family: 'Cormorant', reason: 'High-contrast elegant serif' },
-    { family: 'DM Serif Display', reason: 'Modern high-contrast serif' },
-    { family: 'Abril Fatface', reason: 'Bold Bodoni-style display' },
-  ],
-};
-
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/['']/g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function findNameOverride(family: string): NameOverrideAlt[] | null {
-  const normalized = normalizeName(family);
-
-  if (NAME_OVERRIDES[normalized]) return NAME_OVERRIDES[normalized];
-
-  // Strip common suffixes
-  const stripped = normalized
-    .replace(/\s+(pro|text|display|round|rounded|neue|next|pt|lt|std|mt|regular|bold|light|medium|book|condensed|narrow|wide|extended|variable|vf|web|sc|caption|subhead|headline|title|poster|black|heavy|ultra|thin|hairline|extra|semi)$/g, '')
-    .trim();
-  if (stripped !== normalized && NAME_OVERRIDES[stripped]) return NAME_OVERRIDES[stripped];
-
-  // Partial match
-  for (const key of Object.keys(NAME_OVERRIDES)) {
-    if (normalized.startsWith(key) || key.startsWith(normalized)) return NAME_OVERRIDES[key];
-  }
-
-  // First word match
-  const firstWord = normalized.split(' ')[0];
-  if (firstWord.length > 3) {
-    for (const key of Object.keys(NAME_OVERRIDES)) {
-      if (key === firstWord || key.split(' ')[0] === firstWord) return NAME_OVERRIDES[key];
+function getMatcher(): Promise<FontMatcher | null> {
+  matcherPromise ??= (async () => {
+    const dbPath = path.join(process.cwd(), 'public', 'data', 'font-features.json');
+    try {
+      const file = JSON.parse(await fs.readFile(dbPath, 'utf-8')) as FontDatabaseFile;
+      if (file.version !== 2) throw new Error(`unsupported font-features.json version ${file.version}`);
+      return new FontMatcher(file);
+    } catch (error) {
+      console.error('Font feature database unavailable at', dbPath, error);
+      return null;
     }
-  }
-
-  return null;
+  })();
+  return matcherPromise;
 }
 
-// ============================================================================
-// Clean font family names — strip hashes, IDs, build artifacts
-// e.g. "Inter-280267e3536fdc11" → "Inter", "Poppins-abc123" → "Poppins"
-// ============================================================================
+// Hand-picked free stand-ins for iconic commercial families, keyed by every
+// normalized name the family is served under. Applied on exact keys only: a
+// prefix match would send "Futura Now" or "Avenir Next Condensed" somewhere
+// it does not belong.
+const OVERRIDES: Array<{ names: string[]; alternatives: Array<{ family: string; reason: string }> }> = [
+  {
+    names: ['helvetica', 'helvetica neue', 'neue helvetica', 'arial'],
+    alternatives: [
+      { family: 'Inter', reason: 'Neutral neo-grotesque drawn for screens' },
+      { family: 'Roboto', reason: 'Neo-grotesque skeleton, very close forms' },
+      { family: 'Arimo', reason: 'Metric-compatible Helvetica/Arial design' },
+    ],
+  },
+  {
+    names: ['sf pro', 'sf pro text', 'sf pro display', 'san francisco', 'system ui', '-apple-system'],
+    alternatives: [
+      { family: 'Inter', reason: 'Closest free UI grotesque to SF Pro' },
+      { family: 'Roboto', reason: 'Platform UI sans with similar build' },
+    ],
+  },
+  {
+    names: ['proxima nova'],
+    alternatives: [
+      { family: 'Montserrat', reason: 'Popular free Proxima Nova stand-in' },
+      { family: 'Nunito Sans', reason: 'Similar proportions and x-height' },
+      { family: 'Figtree', reason: 'Geometric-grotesque hybrid like Proxima' },
+    ],
+  },
+  {
+    names: ['gotham', 'gotham ssm'],
+    alternatives: [
+      { family: 'Montserrat', reason: 'Wide geometric caps in the Gotham mould' },
+      { family: 'Raleway', reason: 'Similar geometric proportions' },
+    ],
+  },
+  {
+    names: ['futura', 'futura pt', 'futura std'],
+    alternatives: [
+      { family: 'Jost', reason: "Drawn directly from Futura's geometry" },
+      { family: 'Poppins', reason: 'Geometric sans with circular bowls' },
+    ],
+  },
+  {
+    names: ['avenir', 'avenir next'],
+    alternatives: [
+      { family: 'Nunito Sans', reason: 'Close match in feel and proportions' },
+      { family: 'Mulish', reason: 'Geometric sans with Avenir-like warmth' },
+    ],
+  },
+  {
+    names: ['circular', 'circular std', 'circular xx'],
+    alternatives: [
+      { family: 'DM Sans', reason: 'Geometric sans with similar quirks' },
+      { family: 'Plus Jakarta Sans', reason: 'Modern geometric, similar feel' },
+    ],
+  },
+  {
+    names: ['garamond', 'adobe garamond', 'adobe garamond pro', 'garamond premier pro'],
+    alternatives: [
+      { family: 'EB Garamond', reason: 'Open-source Garamond revival' },
+      { family: 'Cormorant Garamond', reason: 'Display-cut Garamond' },
+    ],
+  },
+  {
+    names: ['bodoni', 'bodoni moda', 'itc bodoni'],
+    alternatives: [
+      { family: 'Libre Bodoni', reason: 'Open-source Bodoni revival' },
+      { family: 'Bodoni Moda', reason: 'High-contrast Didone with optical sizes' },
+    ],
+  },
+];
 
-function cleanFamilyName(family: string): string {
-  let cleaned = family;
+// Tokens that name a face of a family rather than the family itself.
+const FACE_TOKENS = new Set([
+  'regular', 'normal', 'roman', 'italic', 'oblique', 'bold', 'light', 'medium', 'book', 'thin', 'hairline',
+  'black', 'heavy', 'semibold', 'demibold', 'extrabold', 'ultrabold', 'extralight', 'ultralight',
+  'variable', 'vf', 'var', 'web', 'webfont', 'fallback',
+  // Axis tags that variable-font file names carry, e.g. "MonaSansVF-wdth-wght-opsz".
+  'wght', 'wdth', 'opsz', 'slnt', 'ital', 'grad',
+]);
 
-  // Strip trailing hex hash (common in Next.js / webpack builds)
-  // e.g. "Inter-280267e3536fdc11" → "Inter"
-  cleaned = cleaned.replace(/-[0-9a-f]{6,}$/i, '');
-
-  // Strip trailing random IDs like "__abc123_def456"
-  cleaned = cleaned.replace(/__[a-zA-Z0-9_]+$/, '');
-
-  // Strip trailing numbers-only suffix e.g. "Roboto-12345"
-  cleaned = cleaned.replace(/-\d{4,}$/, '');
-
-  return cleaned.trim();
+// "__Inter_Fallback_aaf875" -> "inter", "InterVariable" -> "inter",
+// "sohne-buch-a1b2c3d4" -> "sohne buch", "MonaSansVF-wdth-wght-opsz" -> "mona sans".
+function normalizeFamilyName(name: string): string {
+  return name
+    .replace(/['"]/g, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/)
+    .filter(token => token && !FACE_TOKENS.has(token) && !/^v?\d+(\.\d+)*$/.test(token) && !(/^[0-9a-f]{6,}$/.test(token) && /\d/.test(token)))
+    .join(' ');
 }
 
-/**
- * Search the database for a font by name, trying progressively fuzzier matches:
- * 1. Exact match on original family name
- * 2. Exact match on cleaned name (hash stripped)
- * 3. Case-insensitive startsWith on database entries
- */
-function findInDatabase(
-  family: string,
-  database: FontFeatureEntry[],
-): FontFeatureEntry | null {
-  const lower = family.toLowerCase().trim();
-  const cleanedLower = cleanFamilyName(family).toLowerCase().trim();
+const compact = (name: string) => normalizeFamilyName(name).replace(/ /g, '');
 
-  // 1. Exact match
-  const exact = database.find(e => e.family.toLowerCase().trim() === lower);
-  if (exact) return exact;
-
-  // 2. Match after stripping hash/ID suffixes
-  if (cleanedLower !== lower) {
-    const cleaned = database.find(e => e.family.toLowerCase().trim() === cleanedLower);
-    if (cleaned) return cleaned;
-  }
-
-  // 3. The cleaned name starts with a known font family (or vice versa)
-  // Only if cleaned name is at least 3 chars to avoid false positives
-  if (cleanedLower.length >= 3) {
-    const startsWith = database.find(e => {
-      const dbLower = e.family.toLowerCase().trim();
-      return dbLower.startsWith(cleanedLower) || cleanedLower.startsWith(dbLower);
-    });
-    if (startsWith) return startsWith;
-  }
-
-  return null;
+function findOnGoogleFonts(family: string, records: FontRecord[]): FontRecord | null {
+  const key = compact(family);
+  return key ? records.find(r => compact(r.family) === key) ?? null : null;
 }
 
-// ============================================================================
-// Main API handler
-// ============================================================================
+function findOverride(family: string) {
+  const key = normalizeFamilyName(family);
+  return OVERRIDES.find(o => o.names.includes(key))?.alternatives ?? null;
+}
+
+async function fetchQueryShape(request: NextRequest, url: string | undefined, referer: string | undefined): Promise<FontShape | null> {
+  if (!url) return null;
+  try {
+    const fontUrl = url.startsWith('data:')
+      ? url
+      : `${request.nextUrl.origin}/api/font?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || '')}`;
+    const response = await fetch(fontUrl);
+    if (!response.ok) return null;
+    return await extractShapeFromBuffer(await response.arrayBuffer());
+  } catch (error) {
+    console.error('Could not measure the query font:', error);
+    return null;
+  }
+}
+
+const specimenUrl = (family: string) => `https://fonts.google.com/specimen/${family.replace(/ /g, '+')}`;
+
+interface Alternative {
+  family: string;
+  category?: string;
+  similarity?: number;
+  reason: string;
+  downloadUrl: string;
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { family, weight, style, url, referer } = await request.json();
-
     if (!family) {
       return NextResponse.json({ error: 'Font family is required' }, { status: 400 });
     }
+    const original = { family, weight, style };
 
-    // 0. Check if the font itself is available on Google Fonts
-    //    Use smart matching that strips hashes/IDs from font names
-    const database = await getDatabase();
-    const cleanedFamily = cleanFamilyName(family);
-    const exactMatch = findInDatabase(family, database);
-
-    // Use the cleaned name for name-override lookups and exclude logic
-    const lookupName = exactMatch ? exactMatch.family : cleanedFamily;
-
-    // 1. Check name overrides first (for well-known commercial fonts)
-    const nameMatch = findNameOverride(lookupName);
-    if (nameMatch) {
-      const overrideAlts = nameMatch.map(alt => ({
-        family: alt.family,
-        similarity: 95,
-        reason: alt.reason,
-        downloadUrl: `https://fonts.google.com/specimen/${alt.family.replace(/ /g, '+')}`,
-      }));
-
-      // If the font itself is on Google Fonts, prepend it as a 100% match
-      if (exactMatch) {
-        overrideAlts.unshift({
-          family: exactMatch.family,
-          similarity: 100,
-          reason: 'This exact font is available free on Google Fonts!',
-          downloadUrl: `https://fonts.google.com/specimen/${exactMatch.family.replace(/ /g, '+')}`,
-        });
-      }
-
+    const matcher = await getMatcher();
+    if (!matcher) {
       return NextResponse.json({
-        original: { family, weight, style },
-        method: 'name-override',
-        alternatives: overrideAlts,
-      });
-    }
-
-    // If exact match found in Google Fonts, return it first along with similar fonts
-    if (exactMatch) {
-      // Still try feature matching to find similar fonts too
-      let similarAlts: Array<{ family: string; category?: string; similarity: number; reason: string; downloadUrl: string }> = [];
-
-      if (url) {
-        try {
-          const isDataUrl = url.startsWith('data:');
-          const fontUrl = isDataUrl
-            ? url
-            : `${request.nextUrl.origin}/api/font?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || '')}`;
-
-          const fontResponse = await fetch(fontUrl);
-          if (fontResponse.ok) {
-            const buffer = await fontResponse.arrayBuffer();
-            const queryFeatures = await extractFeaturesFromBuffer(buffer);
-            if (queryFeatures) {
-              // Exclude the matched font from similar results
-              const matches = findSimilar(queryFeatures, database, 4, exactMatch.family);
-              similarAlts = matches.map(m => ({
-                family: m.family,
-                category: m.category,
-                similarity: m.similarity,
-                reason: `${m.similarity}% visual match`,
-                downloadUrl: `https://fonts.google.com/specimen/${m.family.replace(/ /g, '+')}`,
-              }));
-            }
-          }
-        } catch (error) {
-          console.error('Feature matching for exact-match font failed:', error);
-        }
-      }
-
-      return NextResponse.json({
-        original: { family, weight, style },
-        method: 'exact-match',
-        alternatives: [
-          {
-            family: exactMatch.family,
-            category: exactMatch.category,
-            similarity: 100,
-            reason: 'This exact font is available free on Google Fonts!',
-            downloadUrl: `https://fonts.google.com/specimen/${exactMatch.family.replace(/ /g, '+')}`,
-          },
-          ...similarAlts,
-        ],
-      });
-    }
-
-    // 2. Feature-vector similarity matching
-
-    if (database.length > 0 && url) {
-      try {
-        const isDataUrl = url.startsWith('data:');
-        const fontUrl = isDataUrl
-          ? url
-          : `${request.nextUrl.origin}/api/font?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || '')}`;
-
-        const fontResponse = await fetch(fontUrl);
-        if (fontResponse.ok) {
-          const buffer = await fontResponse.arrayBuffer();
-          const queryFeatures = await extractFeaturesFromBuffer(buffer);
-
-          if (queryFeatures) {
-            // Use cleaned name for exclude to avoid false non-matches
-            const matches = findSimilar(queryFeatures, database, 6, cleanedFamily);
-
-            // Check if the top match IS the same font (name matches after cleaning)
-            // If so, promote it to 100% and separate it
-            const topMatch = matches[0];
-            const isTopMatchSameFont = topMatch &&
-              topMatch.family.toLowerCase().trim() === cleanedFamily.toLowerCase().trim();
-
-            let alternatives;
-            if (isTopMatchSameFont) {
-              alternatives = [
-                {
-                  family: topMatch.family,
-                  category: topMatch.category,
-                  similarity: 100,
-                  reason: 'This exact font is available free on Google Fonts!',
-                  downloadUrl: `https://fonts.google.com/specimen/${topMatch.family.replace(/ /g, '+')}`,
-                },
-                ...matches.slice(1, 5).map(m => ({
-                  family: m.family,
-                  category: m.category,
-                  similarity: m.similarity,
-                  reason: `${m.similarity}% visual match`,
-                  downloadUrl: `https://fonts.google.com/specimen/${m.family.replace(/ /g, '+')}`,
-                })),
-              ];
-            } else {
-              alternatives = matches.slice(0, 5).map(m => ({
-                family: m.family,
-                category: m.category,
-                similarity: m.similarity,
-                reason: `${m.similarity}% visual match`,
-                downloadUrl: `https://fonts.google.com/specimen/${m.family.replace(/ /g, '+')}`,
-              }));
-            }
-
-            // Debug: include extracted features
-            const featureDebug: Record<string, number> = {};
-            FEATURE_NAMES.forEach((name, i) => {
-              featureDebug[name] = Math.round(queryFeatures[i] * 1000) / 1000;
-            });
-
-            return NextResponse.json({
-              original: { family, weight, style },
-              method: 'feature-similarity',
-              features: featureDebug,
-              alternatives,
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Feature matching failed:', error);
-      }
-    }
-
-    // 3. No database built yet
-    if (database.length === 0) {
-      return NextResponse.json({
-        original: { family, weight, style },
+        original,
         method: 'no-database',
         error: 'Font feature database not built yet. Run: npm run build:features',
         alternatives: [],
       });
     }
 
-    // 4. Last resort: search database by category from name patterns
-    const lower = cleanedFamily.toLowerCase();
-    let categoryFilter: string | null = null;
-    if (/mono|code|courier|consolas|menlo|terminal/i.test(lower)) categoryFilter = 'monospace';
-    else if (/serif/i.test(lower) && !/sans/i.test(lower)) categoryFilter = 'serif';
-    else if (/sans/i.test(lower)) categoryFilter = 'sans-serif';
-    else if (/script|cursive|handwrit|brush|callig/i.test(lower)) categoryFilter = 'handwriting';
+    const exact = findOnGoogleFonts(family, matcher.records);
+    const override = findOverride(exact?.family ?? family);
+    const shape = await fetchQueryShape(request, url, referer);
 
-    const filtered = categoryFilter
-      ? database.filter(e => e.category === categoryFilter)
-      : database;
-
-    const fallback = filtered.slice(0, 5);
-    return NextResponse.json({
-      original: { family, weight, style },
-      method: 'category-fallback',
-      alternatives: fallback.map(m => ({
-        family: m.family,
-        category: m.category,
-        similarity: 50,
-        reason: `Category match: ${m.category}`,
-        downloadUrl: `https://fonts.google.com/specimen/${m.family.replace(/ /g, '+')}`,
-      })),
+    const curated = new Map((override ?? []).map(o => [o.family, o.reason]));
+    const toAlternative = (record: FontRecord, similarity: number | undefined, reason: string): Alternative => ({
+      family: record.family,
+      category: record.category,
+      similarity,
+      reason: curated.get(record.family) ?? reason,
+      downloadUrl: specimenUrl(record.family),
     });
+    // Measured: curated picks compete on their real similarity, keeping their
+    // wording. Unmeasurable: the curated list is all there is, in its own order.
+    const candidates = shape
+      ? matcher.match(shape, RESULT_COUNT + 1, [...curated.keys()]).map(m => toAlternative(m.record, m.similarity, m.reason))
+      : [...curated.keys()].flatMap(family => {
+          const record = matcher.records.find(r => r.family === family);
+          return record ? [toAlternative(record, undefined, '')] : [];
+        });
 
+    const alternatives: Alternative[] = [
+      ...(exact ? [toAlternative(exact, 100, 'This exact font is free on Google Fonts')] : []),
+      ...candidates.filter(c => c.family !== exact?.family).slice(0, RESULT_COUNT),
+    ];
+
+    return NextResponse.json({
+      original,
+      method: override ? 'name-override' : exact ? 'exact-match' : shape ? 'feature-similarity' : 'unmeasurable',
+      alternatives,
+    });
   } catch (error) {
     console.error('Font matching error:', error);
     return NextResponse.json({ error: 'Failed to find similar fonts' }, { status: 500 });

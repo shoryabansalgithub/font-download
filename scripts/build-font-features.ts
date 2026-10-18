@@ -1,177 +1,200 @@
 /**
- * Build Font Features Database
- * 
- * Downloads all ~1,700 Google Fonts, extracts 15-dimension visual feature vectors,
- * and saves them to public/data/font-features.json for runtime similarity matching.
- * 
- * Usage:
- *   1. Get a free Google Fonts API key from https://console.cloud.google.com
- *   2. Run:  GOOGLE_FONTS_API_KEY=your_key npx tsx scripts/build-font-features.ts
- *      Or on Windows PowerShell:
- *        $env:GOOGLE_FONTS_API_KEY="your_key"; npx tsx scripts/build-font-features.ts
- * 
- * This takes ~30-60 minutes (downloads each font sequentially with delays).
- * Output: public/data/font-features.json (~250KB)
+ * Builds public/data/font-features.json: one shape-feature vector per Google
+ * Fonts family, measured on its regular (or closest-to-400) upright face.
+ *
+ *   npm run build:features            # resumes from the download cache
+ *   npm run build:features -- --retry # also retries families that failed before
+ *
+ * No API key: the family list comes from fonts.google.com/metadata/fonts and
+ * each face is a few-KB css2 `&text=` subset. Downloads are cached under
+ * node_modules/.cache/fontstealer, so a crashed or repeated run only fetches
+ * what is missing and always rewrites the same output from the cache.
  */
 
-import opentype from 'opentype.js';
-import { extractFeatures, FontFeatureEntry } from '../app/lib/font-features';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { decodeFont, extractShape, FEATURE_KEYS, type FeatureKey, type FontShape } from '../app/lib/font-features';
+import type { FontDatabaseFile } from '../app/lib/font-matcher';
+import { boldWeight, CACHE_DIR, closestWeight, fetchFamilyList, fetchSubset, mapPool, splitOf, SUBSET_TEXT, type GoogleFamily } from './google-fonts';
 
-const API_KEY = process.env.GOOGLE_FONTS_API_KEY;
-if (!API_KEY) {
-  console.error('Error: Set GOOGLE_FONTS_API_KEY environment variable');
-  console.error('Get a free key at: https://console.cloud.google.com');
-  console.error('Then run: $env:GOOGLE_FONTS_API_KEY="your_key"; npx tsx scripts/build-font-features.ts');
-  process.exit(1);
+const OUTPUT_FILE = path.join(__dirname, '..', 'public', 'data', 'font-features.json');
+const CONCURRENCY = 6;
+
+// 'stem' is the weight itself, and the storey and slant features have no
+// linear dependence on it.
+const UNCORRECTED = new Set<FeatureKey>(['stem', 'aStorey', 'gStorey', 'slant']);
+
+interface Measured {
+  shape: FontShape;
+  // Hash of the Latin outlines at 1000 units/em: script variants such as
+  // "Noto Sans Thai" ship Noto Sans's Latin unchanged and hash the same.
+  design: string;
 }
 
-const API_URL = `https://www.googleapis.com/webfonts/v1/webfonts?key=${API_KEY}&sort=popularity`;
-const OUTPUT_DIR = path.join(__dirname, '..', 'public', 'data');
-const OUTPUT_FILE = path.join(OUTPUT_DIR, 'font-features.json');
-const PROGRESS_FILE = path.join(OUTPUT_DIR, 'font-features-progress.json');
-const DELAY_MS = 80; // Delay between font downloads to be respectful
-
-interface GoogleFont {
-  family: string;
-  variants: string[];
-  subsets: string[];
-  category: string;
-  files: Record<string, string>;
+async function measure(family: string, weight: number): Promise<Measured | null> {
+  const buffer = await fetchSubset(family, weight);
+  const decoded = buffer && (await decodeFont(new Uint8Array(buffer).buffer as ArrayBuffer));
+  const shape = decoded && extractShape(decoded.font, decoded.sfnt);
+  if (!decoded || !shape) return null;
+  const { font } = decoded;
+  const outlines = [...SUBSET_TEXT].map(char => font.charToGlyph(char).getPath(0, 0, 1000).toPathData(0));
+  return { shape, design: createHash('sha1').update(outlines.join('|')).digest('hex') };
 }
 
-interface GoogleFontsResponse {
-  items: GoogleFont[];
+function round(value: number): number | null {
+  return Number.isFinite(value) ? Math.round(value * 10000) / 10000 : null;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
 }
 
-async function fetchFontList(): Promise<GoogleFont[]> {
-  console.log('Fetching Google Fonts list...');
-  const response = await fetch(API_URL);
-  if (!response.ok) {
-    throw new Error(`Google Fonts API error: ${response.status} ${response.statusText}`);
+// Median of per-family (feature change / stem change) between the regular and
+// bold face of 'train' families. The median keeps a few wild display families
+// from steering the fit.
+function fitWeightSlopes(pairs: Array<[FontShape, FontShape]>): FontDatabaseFile['weightSlopes'] {
+  const slopes: FontDatabaseFile['weightSlopes'] = {};
+  for (const key of FEATURE_KEYS) {
+    if (UNCORRECTED.has(key)) continue;
+    const ratios = pairs
+      .map(([regular, bold]) => {
+        const dStem = bold.features.stem - regular.features.stem;
+        // A sans pair has no serif at either weight and says nothing about how serifs scale.
+        if (dStem <= 0.02 || (regular.features[key] === 0 && bold.features[key] === 0)) return NaN;
+        return (bold.features[key] - regular.features[key]) / dStem;
+      })
+      .filter(Number.isFinite);
+    slopes[key] = round(median(ratios)) ?? 0;
   }
-  const data: GoogleFontsResponse = await response.json();
-  console.log(`Found ${data.items.length} fonts`);
-  return data.items;
+  return slopes;
 }
 
-async function downloadFont(url: string): Promise<ArrayBuffer | null> {
-  try {
-    // Google Fonts API returns http:// URLs, convert to https://
-    const secureUrl = url.replace('http://', 'https://');
-    const response = await fetch(secureUrl, {
-      headers: { 'User-Agent': 'FontFeatureBuilder/1.0' },
+// Between-family variance of each weight-corrected feature over its
+// within-family (regular vs bold) variance. High means the feature tells
+// designs apart and survives a change of weight.
+function fitSeparation(pairs: Array<[FontShape, FontShape]>, slopes: FontDatabaseFile['weightSlopes']): FontDatabaseFile['separation'] {
+  const separation = {} as FontDatabaseFile['separation'];
+  for (const key of FEATURE_KEYS) {
+    const corrected = (shape: FontShape) => shape.features[key] - (slopes[key] ?? 0) * shape.features.stem;
+    const complete = pairs.filter(([regular, bold]) => Number.isFinite(corrected(regular)) && Number.isFinite(corrected(bold)));
+    const values = complete.map(([regular]) => corrected(regular));
+    const mean = values.reduce((s, v) => s + v, 0) / values.length;
+    const between = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+    const within = complete.reduce((s, [regular, bold]) => s + (corrected(bold) - corrected(regular)) ** 2, 0) / complete.length / 2;
+    separation[key] = round(between / within) ?? 0;
+  }
+  return separation;
+}
+
+// Union of identical outline hashes and near-identical measurements (every
+// feature within 0.02 library standard deviations). The second catches script
+// families that carry an older build of the same Latin, e.g. "Noto Serif
+// Bengali" next to "Noto Serif", which differ by a few font units.
+const SAME_DESIGN_TOLERANCE = 0.02;
+
+function designGroups(fonts: Measured[]): number[] {
+  const parent = fonts.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const union = (i: number, j: number) => {
+    parent[find(i)] = find(j);
+  };
+
+  const byHash = new Map<string, number>();
+  fonts.forEach((f, i) => {
+    const seen = byHash.get(f.design);
+    if (seen === undefined) byHash.set(f.design, i);
+    else union(i, seen);
+  });
+
+  const scale = FEATURE_KEYS.map(key => {
+    const values = fonts.map(f => f.shape.features[key]).filter(Number.isFinite);
+    const mean = values.reduce((s, v) => s + v, 0) / values.length;
+    return Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length) || 1;
+  });
+  const nearlyEqual = (a: FontShape, b: FontShape) =>
+    a.monospace === b.monospace &&
+    FEATURE_KEYS.every((key, k) => {
+      const x = a.features[key];
+      const y = b.features[key];
+      return Number.isFinite(x) && Number.isFinite(y) ? Math.abs(x - y) <= SAME_DESIGN_TOLERANCE * scale[k] : Number.isFinite(x) === Number.isFinite(y);
     });
-    if (!response.ok) return null;
-    return await response.arrayBuffer();
-  } catch {
-    return null;
+  for (let i = 0; i < fonts.length; i++) {
+    for (let j = i + 1; j < fonts.length; j++) {
+      if (nearlyEqual(fonts[i].shape, fonts[j].shape)) union(i, j);
+    }
   }
-}
-
-function extractFeaturesFromFont(buffer: ArrayBuffer): ReturnType<typeof extractFeatures> | null {
-  try {
-    const font = opentype.parse(buffer);
-    return extractFeatures(font);
-  } catch {
-    return null;
-  }
+  return fonts.map((_, i) => find(i));
 }
 
 async function main() {
-  // Create output directory
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-
-  // Fetch the font list
-  const fonts = await fetchFontList();
-
-  // Load progress if resuming
-  let results: FontFeatureEntry[] = [];
-  const processed = new Set<string>();
-  if (fs.existsSync(PROGRESS_FILE)) {
-    try {
-      results = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8'));
-      for (const r of results) processed.add(r.family);
-      console.log(`Resuming from progress file: ${results.length} fonts already processed`);
-    } catch {
-      console.log('Could not load progress file, starting fresh');
+  const started = Date.now();
+  if (process.argv.includes('--retry')) {
+    const dir = path.join(CACHE_DIR, 'subsets');
+    for (const file of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
+      if (file.endsWith('.fail')) fs.unlinkSync(path.join(dir, file));
     }
   }
 
-  const total = fonts.length;
-  let succeeded = results.length;
-  let failed = 0;
+  const families = await fetchFamilyList();
+  console.log(`${families.length} families`);
 
-  for (let i = 0; i < total; i++) {
-    const font = fonts[i];
+  let done = 0;
+  const rows = await mapPool(families, CONCURRENCY, async family => {
+    const weight = closestWeight(family.weights, 400);
+    const regular = await measure(family.family, weight);
+    const bold = boldWeight(family);
+    const pairWithBold = regular && bold && splitOf(family.family) === 'train' ? await measure(family.family, bold) : null;
+    if (++done % 100 === 0) console.log(`  ${done}/${families.length}`);
+    return { family, weight, regular, pairWithBold };
+  });
 
-    // Skip if already processed
-    if (processed.has(font.family)) continue;
+  const measured = rows.filter(r => r.regular);
+  const pairs = measured.filter(r => r.pairWithBold).map(r => [r.regular!.shape, r.pairWithBold!.shape] as [FontShape, FontShape]);
 
-    // Get the regular variant URL (preferred), or first available
-    const fileUrl = font.files?.['regular'] || font.files?.['400'] || Object.values(font.files || {})[0];
-    if (!fileUrl) {
-      console.log(`  [${i + 1}/${total}] SKIP ${font.family} — no file URL`);
-      failed++;
-      continue;
-    }
+  const groupOf = designGroups(measured.map(r => r.regular!));
+  // One family per Latin design ranks; the rest point at it.
+  const canonical = new Map<number, GoogleFamily>();
+  measured.forEach((r, i) => {
+    const current = canonical.get(groupOf[i]);
+    if (!current || r.family.popularity < current.popularity) canonical.set(groupOf[i], r.family);
+  });
 
-    process.stdout.write(`  [${i + 1}/${total}] ${font.family}... `);
+  const weightSlopes = fitWeightSlopes(pairs);
+  const output: FontDatabaseFile = {
+    version: 2,
+    features: [...FEATURE_KEYS],
+    weightSlopes,
+    separation: fitSeparation(pairs, weightSlopes),
+    fonts: measured.map((r, i) => {
+      const sameAs = canonical.get(groupOf[i])!.family;
+      return {
+        family: r.family.family,
+        ...(sameAs !== r.family.family && { sameAs }),
+        category: r.family.category,
+        weight: r.weight,
+        monospace: r.regular!.shape.monospace,
+        v: FEATURE_KEYS.map(key => round(r.regular!.shape.features[key])),
+      };
+    }),
+  };
 
-    const buffer = await downloadFont(fileUrl);
-    if (!buffer) {
-      console.log('DOWNLOAD FAILED');
-      failed++;
-      await sleep(DELAY_MS);
-      continue;
-    }
+  fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(output));
 
-    const features = extractFeaturesFromFont(buffer);
-    if (!features) {
-      console.log('PARSE FAILED');
-      failed++;
-      await sleep(DELAY_MS);
-      continue;
-    }
-
-    results.push({
-      family: font.family,
-      category: font.category,
-      features,
-    });
-    succeeded++;
-    console.log('OK');
-
-    // Save progress every 50 fonts
-    if (succeeded % 50 === 0) {
-      fs.writeFileSync(PROGRESS_FILE, JSON.stringify(results));
-      console.log(`  --- Progress saved: ${succeeded} fonts ---`);
-    }
-
-    await sleep(DELAY_MS);
+  const skipped = rows.filter(r => !r.regular).map(r => r.family.family);
+  console.log(`\n${output.fonts.length} families measured (${canonical.size} distinct Latin designs), ${skipped.length} skipped (no Latin H/n/o/x or download failed)`);
+  console.log(`fitted on ${pairs.length} regular/bold 'train' pairs:`);
+  for (const key of FEATURE_KEYS) {
+    console.log(`  ${key.padEnd(13)} slope ${String(output.weightSlopes[key] ?? 0).padStart(8)}  separation ${String(output.separation[key]).padStart(8)}`);
   }
-
-  // Write final output (compact JSON)
-  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(results));
-
-  // Clean up progress file
-  if (fs.existsSync(PROGRESS_FILE)) {
-    fs.unlinkSync(PROGRESS_FILE);
-  }
-
-  const sizeKB = Math.round(fs.statSync(OUTPUT_FILE).size / 1024);
-  console.log(`\nDone!`);
-  console.log(`  Succeeded: ${succeeded}`);
-  console.log(`  Failed: ${failed}`);
-  console.log(`  Output: ${OUTPUT_FILE} (${sizeKB} KB)`);
+  console.log(`${OUTPUT_FILE} (${Math.round(fs.statSync(OUTPUT_FILE).size / 1024)} KB) in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(error => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}
