@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "npx tsx scripts/test-font-grouping.ts",
-    "build:features": "npx tsx scripts/build-font-features.ts"
+    "build:features": "npx tsx scripts/build-font-features.ts",
+    "eval:match": "npx tsx scripts/eval-match.ts"
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
