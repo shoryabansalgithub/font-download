@@ -25,9 +25,15 @@ function lastDeclaration(block: string, regex: RegExp): string | undefined {
   return value?.trim();
 }
 
+const embeddedAbsoluteUrl = /^\/+(https?:\/\/.+)$/i;
+
 function resolveUrl(base: string, relative: string): string {
   try {
     if (relative.startsWith('data:')) return relative;
+    // Some sites write `url(/https://cdn/x.woff2)`. Browsers resolve that against
+    // the page origin and get a 404, so use the embedded absolute URL.
+    const embedded = relative.match(embeddedAbsoluteUrl);
+    if (embedded) return new URL(embedded[1]).href;
     return new URL(relative, base).href;
   } catch {
     return relative;
