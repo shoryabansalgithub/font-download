@@ -12,10 +12,18 @@ const fontFaceRegex = /@font-face\s*\{([\s\S]*?)\}/gi;
 const importRegex = /@import\s+(?:url\(['"]?|['"])([^'")]+\.css[^'")]*)(?:['"]?\)['"]?|['"])\s*[^;]*;/gi;
 
 // Regex to extract properties from @font-face
-const fontFamilyRegex = /font-family\s*:\s*['"]?([^'";]+)['"]?/i;
-const srcRegex = /src\s*:\s*([^;]+)/i;
-const weightRegex = /font-weight\s*:\s*([^;]+)/i;
-const styleRegex = /font-style\s*:\s*([^;]+)/i;
+const fontFamilyRegex = /font-family\s*:\s*['"]?([^'";]+)['"]?/gi;
+const srcRegex = /(?:^|[;{\s])src\s*:\s*([^;]+)/gi;
+const weightRegex = /font-weight\s*:\s*([^;]+)/gi;
+const styleRegex = /font-style\s*:\s*([^;]+)/gi;
+
+// Legacy @font-face blocks declare `src` twice, an EOT-only line for old IE and
+// then the real list. Browsers use the last declaration.
+function lastDeclaration(block: string, regex: RegExp): string | undefined {
+  let value: string | undefined;
+  for (const match of block.matchAll(regex)) value = match[1];
+  return value?.trim();
+}
 
 function resolveUrl(base: string, relative: string): string {
   try {
@@ -83,15 +91,14 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace
   const fontFaceRegexCopy = new RegExp(fontFaceRegex.source, 'gi');
   while ((blockMatch = fontFaceRegexCopy.exec(css)) !== null) {
     const block = blockMatch[1];
-    const familyMatch = block.match(fontFamilyRegex);
-    const srcMatch = block.match(srcRegex);
-    const weightMatch = block.match(weightRegex);
-    const styleMatch = block.match(styleRegex);
+    const familyValue = lastDeclaration(block, fontFamilyRegex);
+    const srcValue = lastDeclaration(block, srcRegex);
+    const weightValue = lastDeclaration(block, weightRegex);
+    const styleValue = lastDeclaration(block, styleRegex);
 
-    if (!familyMatch || !srcMatch) continue;
+    if (!familyValue || !srcValue) continue;
 
-    const family = normalizeFamilyName(familyMatch[1]);
-    const srcValue = srcMatch[1];
+    const family = normalizeFamilyName(familyValue);
     const bestSource = pickBestSource(srcValue, baseUrl);
     if (!bestSource) continue;
 
@@ -105,8 +112,8 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace
       family,
       format: bestSource.format,
       url: bestSource.url,
-      weight: weightMatch ? weightMatch[1].trim() : '400',
-      style: styleMatch ? styleMatch[1].trim() : 'normal'
+      weight: weightValue || '400',
+      style: styleValue || 'normal'
     });
   }
 
