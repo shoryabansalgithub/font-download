@@ -60,7 +60,7 @@ h6 {
   text-wrap: balance;
 }
 
-p {
+body {
   text-wrap: pretty;
 }
 
@@ -73,43 +73,9 @@ p {
   color: inherit;
 }
 
-.app-shell {
-  width: min(100% - 1.2rem, 1220px);
-  margin-inline: auto;
-  border: 1px solid var(--line-soft);
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(247, 251, 255, 0.9));
-  box-shadow:
-    0 34px 80px -58px rgba(14, 34, 67, 0.45),
-    0 8px 26px rgba(8, 32, 70, 0.13);
-  backdrop-filter: blur(10px);
-}
 
-.panel {
-  border: 1px solid var(--line-soft);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(243, 248, 255, 0.95));
-  box-shadow: 0 14px 30px -22px rgba(12, 30, 60, 0.4);
-}
 
-.kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.48rem;
-  border-radius: 999px;
-  border: 1px solid #c7d7ef;
-  background: linear-gradient(180deg, #f5f9ff 0%, #eaf2ff 100%);
-  color: var(--brand-2);
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-  padding: 0.44rem 0.8rem;
-}
 
-.numeric {
-  font-variant-numeric: tabular-nums;
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -175,7 +141,11 @@ select {
   filter: blur(0.3px);
 }
 
-/* The URL bar is a slot carved into the same glass: recessed, dark, with the
+/* micro-spec: crt-slot (the URL slot, shared by the hero and the results printer)
+   form: radius 3, the field and its key in one recess; material: dark glass; depth: inset
+   shadows (recessed) with a light lower lip; behaviour: the field inside carries focus,
+   the slot itself has no states on the hero.
+   The URL bar is a slot carved into the same glass: recessed, dark, with the
    same bottom-lip highlight as the letters. */
 .crt-slot {
   background: rgba(7, 14, 84, 0.42);
@@ -196,234 +166,6 @@ select {
     0 2px 0 rgba(64, 92, 176, 0.7),
     0 3px 6px rgba(0, 8, 60, 0.45);
   border-radius: 3px;
-}
-
-/* Letterpress variant of the engraving for text too small for the per-letter
-   treatment: darker-than-surface fill, light catching the lower edge. */
-.crt-etched {
-  color: #121d8f;
-  text-shadow:
-    0 1px 0 rgba(190, 213, 255, 0.55),
-    0 -1px 1px rgba(2, 6, 44, 0.55);
-}
-
-/* Content the machine displays, as opposed to chrome carved into it. */
-.crt-phosphor {
-  color: #eaf2ff;
-  text-shadow: 0 0 14px rgba(143, 184, 255, 0.55);
-}
-
-/* ── Scan results screen (second screen) ─────────────────────────── */
-
-/*
- * Scoped to .scan-page so none of this reaches the landing page, which is
- * being treated separately. Everything below is additive.
- *
- * The base token set carries ink/line/brand but only three ink steps, which is
- * not enough for a screen made almost entirely of quiet type. The extra steps
- * are declared here once and referenced everywhere rather than retyped.
- */
-.scan-page {
-  /* The results screen is set in Inter throughout, tightened. Specimen text,
-     the weight ramp and the family names all set font-family/weight inline from
-     the scanned font's own data, so they override this rather than inherit it. */
-  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
-  font-weight: 500;
-  letter-spacing: -0.012em;
-
-  --scan-ink-1: var(--text-1);
-  --scan-ink-2: var(--text-2);
-  --scan-ink-3: #55697f; /* controls at rest: ramp, toggles - 5.7:1 */
-  /* Small mono meta sits at 10-12px, so it has to clear 4.5:1 rather than the
-     3:1 large-text floor. The lighter greys this screen started with measured
-     3.35:1 and 2.51:1 and were unreadable at that size. */
-  --scan-ink-4: #66798f; /* mono meta and captions - 4.5:1 */
-  --scan-ink-5: #748aa4; /* the headline's second line, 34px+ only - 3.6:1 */
-  --scan-line-1: #d2ddee; /* control borders */
-  --scan-line-2: #dce6f5; /* card edge */
-  --scan-line-3: #e8eef8; /* dividers inside a card */
-  --scan-wash: #eef3fb; /* hover wash on quiet controls */
-  --scan-specimen: #152742; /* specimen ink, one step warmer than body */
-  --scan-accent: var(--brand-1);
-  --scan-accent-deep: var(--brand-2);
-}
-
-/*
- * The base sheet kills :focus-visible globally with no replacement. Rather than
- * depend on every element remembering .scan-focusable, every focusable thing
- * inside the scan screen gets the ring back by default.
- */
-.scan-page :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible,
-.scan-page .scan-focusable:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px #fff,
-    0 0 0 4px rgba(29, 98, 221, 0.45);
-}
-
-/* A heading focused only to move the screen reader should not draw a ring. */
-.scan-page [tabindex='-1']:focus-visible {
-  box-shadow: none;
-}
-
-/*
- * The specimen is the input. It carries no box or border at rest - a field
- * outline around the type would compete with the type - so the affordance is a
- * faint baseline rule on hover and the standard ring once focused.
- */
-.scan-page .specimen-line[contenteditable] {
-  cursor: text;
-  box-decoration-break: clone;
-}
-
-@media (hover: hover) {
-  .scan-page .specimen-line[contenteditable]:hover:not(:focus) {
-    box-shadow: inset 0 -1px 0 0 var(--scan-line-1);
-  }
-}
-
-.scan-page .specimen-line[contenteditable]:focus-visible,
-.scan-page .specimen-line[contenteditable]:focus {
-  outline: none;
-  box-shadow: inset 0 -2px 0 0 var(--scan-accent);
-}
-
-.scan-page .specimen-line[contenteditable]:empty::before {
-  content: attr(data-placeholder);
-  color: var(--scan-ink-5);
-}
-
-/* Swapping the rendered face is a content change, so it crossfades in place
-   instead of sliding - the specimen must not move while it is being judged.
-   Driven by a transition on opacity in the component, not a keyed remount. */
-
-@keyframes scan-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-@keyframes scan-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-@keyframes scan-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.scan-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(226, 232, 240, 0.55) 0%,
-    rgba(226, 232, 240, 0.95) 45%,
-    rgba(226, 232, 240, 0.55) 90%
-  );
-  background-size: 200% 100%;
-  animation: scan-shimmer 1.4s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .scan-shimmer {
-    animation: none;
-    background: rgba(226, 232, 240, 0.7);
-  }
-}
-
-/* ── Scan results: CRT skin ──────────────────────────────────────────
-   The results screen lives inside the machine the landing page shows:
-   deep phosphor blue, chrome etched into the case, content lit on glass.
-   The layout and component structure above are untouched; this block only
-   re-points the token set and the handful of surfaces that were white. */
-
-.scan-page {
-  --scan-ink-1: #eaf1ff;
-  --scan-ink-2: #c9d8f8;
-  --scan-ink-3: #aec2f2;
-  --scan-ink-4: #a4b7ec; /* small mono meta needs the lightest step on blue */
-  --scan-ink-5: #8fa3dd;
-  --scan-line-1: rgba(214, 229, 255, 0.3);
-  --scan-line-2: rgba(214, 229, 255, 0.18);
-  --scan-line-3: rgba(214, 229, 255, 0.12);
-  --scan-wash: rgba(220, 235, 255, 0.08);
-  --scan-specimen: #edf3ff;
-  --scan-accent: #cfe1ff;
-  --scan-accent-deep: #ffffff;
-  --danger: #ffa9b8;
-  --success: #8fe8c0;
-
-  background:
-    radial-gradient(90% 55% at 50% 0%, rgba(130, 160, 255, 0.22), transparent 70%),
-    repeating-linear-gradient(0deg, rgba(220, 235, 255, 0.045) 0 1px, transparent 1px 56px),
-    repeating-linear-gradient(90deg, rgba(220, 235, 255, 0.045) 0 1px, transparent 1px 56px),
-    linear-gradient(180deg, #2830dd 0%, #1c23c4 100%);
-}
-
-/* Focus ring recut for a dark surface: dark gap, light ring. */
-.scan-page :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible,
-.scan-page .scan-focusable:focus-visible {
-  box-shadow:
-    0 0 0 2px rgba(10, 14, 100, 0.9),
-    0 0 0 4px rgba(214, 232, 255, 0.85);
-}
-
-.scan-page .panel {
-  border: 1px solid rgba(214, 229, 255, 0.16);
-  background: linear-gradient(180deg, rgba(10, 16, 112, 0.35), rgba(7, 11, 88, 0.5));
-  box-shadow:
-    inset 0 2px 14px rgba(0, 6, 60, 0.45),
-    0 1px 0 rgba(173, 201, 255, 0.14);
-}
-
-/* The block cursor at the end of the scanning readout. Sized in em so it
-   follows whatever text size its row sets. */
-.crt-cursor {
-  display: inline-block;
-  width: 0.5em;
-  height: 0.95em;
-  background: #dcebff;
-  box-shadow: 0 0 14px rgba(143, 184, 255, 0.8);
-  animation: crt-blink 1.1s steps(1) infinite;
-}
-
-@keyframes crt-blink {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .crt-cursor {
-    animation: none;
-  }
-}
-
-.scan-page .scan-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(214, 229, 255, 0.1) 0%,
-    rgba(214, 229, 255, 0.22) 45%,
-    rgba(214, 229, 255, 0.1) 90%
-  );
-  background-size: 200% 100%;
 }
 
 /* micro-spec: Room (the page ground)
