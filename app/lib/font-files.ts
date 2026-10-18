@@ -20,22 +20,60 @@ function safeStem(text: string): string {
     .replace(/^[.-]+|[.-]+$/g, '');
 }
 
-export function previewSource(face: Face): string {
-  const { url, referer } = face.variant;
+function fontSource(url: string, referer: string | undefined): string {
   if (url.startsWith('data:')) return url;
   return `/api/font?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || '')}`;
 }
 
-export function fileOf(familyName: string, face: Face, folder?: string): FontFile {
-  const family = safeStem(familyName) || 'font';
+function partsOf(face: Face): { url: string; format: string; unicodeRange?: string }[] {
+  return face.variant.subsets ?? [face.variant];
+}
+
+export function previewSources(face: Face): { source: string; unicodeRange?: string }[] {
+  return partsOf(face).map((part) => ({ source: fontSource(part.url, face.variant.referer), unicodeRange: part.unicodeRange }));
+}
+
+export function faceStem(familyName: string, face: Face): string {
   const style = face.weight.isRange
     ? face.italic ? 'Variable-Italic' : 'Variable'
     : safeStem(face.label);
-  return {
-    name: `${family}-${style}.${formatInfo(face.variant.format).ext}`,
-    source: previewSource(face),
-    folder,
-  };
+  return `${safeStem(familyName) || 'font'}-${style}`;
+}
+
+function fontFaceRule(familyName: string, face: Face, file: string, unicodeRange: string): string {
+  return [
+    '@font-face {',
+    `  font-family: "${familyName.replace(/["\\]/g, '\\$&')}";`,
+    `  font-style: ${face.italic ? 'italic' : 'normal'};`,
+    `  font-weight: ${face.variant.weight};`,
+    `  src: url("${file}");`,
+    `  unicode-range: ${unicodeRange};`,
+    '}',
+  ].join('\n');
+}
+
+/**
+ * The files that make up the faces. A face split into unicode-range subsets
+ * ships every subset, plus one stylesheet that maps each subset file back to
+ * its code points: the subsets only work as one font when loaded with them.
+ */
+export function filesOf(familyName: string, faces: Face[], folder?: string): FontFile[] {
+  const rules: string[] = [];
+  const files = faces.flatMap((face) => {
+    const parts = partsOf(face);
+    return parts.map((part, i) => {
+      const name = `${faceStem(familyName, face)}${parts.length > 1 ? `.${i + 1}` : ''}.${formatInfo(part.format).ext}`;
+      if (part.unicodeRange) rules.push(fontFaceRule(familyName, face, name, part.unicodeRange));
+      return { name, source: fontSource(part.url, face.variant.referer), folder };
+    });
+  });
+  if (rules.length === 0) return files;
+  const css = `data:text/css;charset=utf-8,${encodeURIComponent(`${rules.join('\n\n')}\n`)}`;
+  return [...files, { name: `${safeStem(familyName) || 'font'}.css`, source: css, folder }];
+}
+
+export function downloadOf(files: FontFile[], stem: string): { files: FontFile[]; archive?: string } {
+  return files.length === 1 ? { files } : { files, archive: zipName(stem) };
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {

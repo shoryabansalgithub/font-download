@@ -16,6 +16,7 @@ const fontFamilyRegex = /font-family\s*:\s*['"]?([^'";]+)['"]?/gi;
 const srcRegex = /(?:^|[;{\s])src\s*:\s*([^;]+)/gi;
 const weightRegex = /font-weight\s*:\s*([^;]+)/gi;
 const styleRegex = /font-style\s*:\s*([^;]+)/gi;
+const unicodeRangeRegex = /unicode-range\s*:\s*([^;]+)/gi;
 
 // Legacy @font-face blocks declare `src` twice, an EOT-only line for old IE and
 // then the real list. Browsers use the last declaration.
@@ -101,6 +102,7 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace
     const srcValue = lastDeclaration(block, srcRegex);
     const weightValue = lastDeclaration(block, weightRegex);
     const styleValue = lastDeclaration(block, styleRegex);
+    const unicodeRange = lastDeclaration(block, unicodeRangeRegex);
 
     if (!familyValue || !srcValue) continue;
 
@@ -119,7 +121,8 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace
       format: bestSource.format,
       url: bestSource.url,
       weight: weightValue || '400',
-      style: styleValue || 'normal'
+      style: styleValue || 'normal',
+      unicodeRange
     });
   }
 
@@ -170,6 +173,7 @@ async function extractFontsWithPlaywright(targetUrl: string): Promise<RawFontFac
         family: fontFace.family,
         style: fontFace.style,
         weight: fontFace.weight,
+        unicodeRange: fontFace.unicodeRange,
         status: fontFace.status,
         src: (fontFace as unknown as { src?: string }).src || ''
       }));
@@ -195,6 +199,7 @@ async function extractFontsWithPlaywright(targetUrl: string): Promise<RawFontFac
         url: bestSource.url,
         weight: face.weight || '400',
         style: face.style || 'normal',
+        unicodeRange: face.unicodeRange,
         referer: targetUrl
       });
     }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatInfo, type Face } from '../../lib/faces';
-import { previewSource } from '../../lib/font-files';
+import { previewSources } from '../../lib/font-files';
 
 /** Blocked: the browser rejected the file. Unsupported: a format no modern browser renders. */
 export type PreviewStatus = 'loading' | 'ready' | 'blocked' | 'unsupported';
@@ -13,24 +13,25 @@ function previewFamily(face: Face): string {
   return `fs-${face.key}`;
 }
 
-function createFace(face: Face, source: string): FontFace {
-  const descriptors = { style: face.italic ? 'italic' : 'normal', weight: face.variant.weight || '400' };
+function createFace(face: Face, source: string, unicodeRange?: string): FontFace {
+  const css = `url("${source.replace(/"/g, '%22')}")`;
+  const descriptors = { style: face.italic ? 'italic' : 'normal', ...(unicodeRange && { unicodeRange }) };
   try {
-    return new FontFace(previewFamily(face), source, descriptors);
+    return new FontFace(previewFamily(face), css, { ...descriptors, weight: face.variant.weight || '400' });
   } catch {
-    return new FontFace(previewFamily(face), source, { style: descriptors.style });
+    return new FontFace(previewFamily(face), css, descriptors);
   }
 }
 
 function load(face: Face): Promise<boolean> {
   let pending = loads.get(face.key);
   if (!pending) {
-    const url = previewSource(face);
-    const fontFace = createFace(face, `url("${url.replace(/"/g, '%22')}")`);
-    pending = fontFace
+    const [primary, ...loadedOnDemand] = previewSources(face).map(({ source, unicodeRange }) => createFace(face, source, unicodeRange));
+    pending = primary
       .load()
       .then((loaded) => {
         document.fonts.add(loaded);
+        for (const subset of loadedOnDemand) document.fonts.add(subset);
         return true;
       })
       .catch(() => false);

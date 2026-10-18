@@ -3,7 +3,7 @@
 import { memo, useEffect, useId, useRef, useState } from 'react';
 import type { FontFamily } from '../../types';
 import { facesOf, familyFacts, hashFontId, leadFace } from '../../lib/faces';
-import { fileOf, zipName } from '../../lib/font-files';
+import { downloadOf, filesOf } from '../../lib/font-files';
 import DownloadButton from './DownloadButton';
 import DownloadNote from './DownloadNote';
 import FamilyDetail from './FamilyDetail';
@@ -91,10 +91,7 @@ function FamilyRow({
     if (status === 'ready' || status === 'blocked') onBlocked(rowKey, status === 'blocked');
   }, [status, rowKey, onBlocked]);
 
-  const download = () => {
-    const files = faces.map((face) => fileOf(family.family, face));
-    void run(files.length === 1 ? { files } : { files, archive: zipName(family.family) });
-  };
+  const download = () => void run(downloadOf(filesOf(family.family, faces), family.family));
 
   const formatTokens = [facts.formats.join(' '), faces.length > 1 ? `${faces.length} faces` : '1 face'];
   const weightTokens = facts.hasItalic ? [...facts.weights, 'ital'] : facts.weights;

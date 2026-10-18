@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { FontAlternative, FontFamily } from '../../types';
 import { formatInfo, rangeText, type Face } from '../../lib/faces';
-import { fileOf } from '../../lib/font-files';
+import { downloadOf, faceStem, filesOf } from '../../lib/font-files';
 import DownloadButton from './DownloadButton';
 import DownloadNote from './DownloadNote';
 import { ExternalIcon, Spinner, SimilarIcon } from './Icons';
@@ -26,7 +26,7 @@ function FaceLine({ familyName, face, i }: { familyName: string; face: Face; i: 
   const status = usePreview(face, true);
   const [weight, setWeight] = useState(face.renderWeight);
   const { state, run } = useDownload();
-  const file = fileOf(familyName, face);
+  const download = downloadOf(filesOf(familyName, [face]), faceStem(familyName, face));
   const format = formatInfo(face.variant.format).label;
 
   return (
@@ -63,8 +63,8 @@ function FaceLine({ familyName, face, i }: { familyName: string; face: Face; i: 
           variant="icon"
           state={state}
           idleLabel="Steal"
-          ariaLabel={`Download ${file.name}`}
-          onClick={() => void run({ files: [file] })}
+          ariaLabel={download.archive ? `Download ${download.archive}` : `Download ${download.files[0].name}`}
+          onClick={() => void run(download)}
           className="ml-auto sm:ml-0"
         />
       </div>

@@ -235,6 +235,52 @@ console.log('\nSuffix stripping requires a word boundary');
     });
 }
 
+console.log('\nA face split into unicode-range subsets is one face with every subset file');
+{
+    // x.com's shape: each weight declared once per script subset, same family/weight/style.
+    const latin = 'U+??,U+131,U+152-153,U+2000-206F';
+    const cyrillic = 'U+301,U+400-45F,U+490-491';
+    const greek = 'U+370-377,U+37A-37F';
+    const subset = (weight: string, name: string, range: string) =>
+        face('TwitterChirp', weight, 'normal', `https://abs/Chirp-${weight}.${name}.woff2`, { unicodeRange: range });
+    const groups = groupFontFaces([
+        subset('400', 'cyrillic', cyrillic),
+        subset('400', 'latin', latin),
+        subset('400', 'greek', greek),
+        subset('700', 'cyrillic', cyrillic),
+        subset('700', 'latin', latin),
+        subset('700', 'greek', greek),
+        // The same stylesheet reached twice.
+        subset('400', 'latin', latin),
+    ]);
+    check('one family', groups.length, 1);
+    const [chirp] = groups;
+    check('one variant per weight', chirp.variants.map((v) => v.weight), ['400', '700']);
+    check('the Latin subset is the face url', chirp.variants.map((v) => v.url), [
+        'https://abs/Chirp-400.latin.woff2',
+        'https://abs/Chirp-700.latin.woff2',
+    ]);
+    check('every subset file kept, Latin first, each once', chirp.variants[0].subsets, [
+        { url: 'https://abs/Chirp-400.latin.woff2', format: 'WOFF2', unicodeRange: latin },
+        { url: 'https://abs/Chirp-400.cyrillic.woff2', format: 'WOFF2', unicodeRange: cyrillic },
+        { url: 'https://abs/Chirp-400.greek.woff2', format: 'WOFF2', unicodeRange: greek },
+    ]);
+}
+
+console.log('\nFiles that cover the whole range stay separate faces');
+{
+    // No unicode-range (or the full default document.fonts reports) means each file is a complete font.
+    const groups = groupFontFaces([
+        face('Brand', '400', 'normal', 'https://x/brand-v1.woff2'),
+        face('Brand', '400', 'normal', 'https://x/brand-v2.woff2', { unicodeRange: 'U+0-10FFFF' }),
+    ]);
+    check('two files, two faces', groups[0].variants.map((v) => v.url), [
+        'https://x/brand-v1.woff2',
+        'https://x/brand-v2.woff2',
+    ]);
+    check('no subsets on a whole-range face', groups[0].variants.map((v) => v.subsets), [undefined, undefined]);
+}
+
 console.log('\nNo faces means no families, which drives the empty state');
 check('empty', groupFontFaces([]).length, 0);
 
