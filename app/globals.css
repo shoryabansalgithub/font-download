@@ -755,3 +755,124 @@ select {
   border-radius: 2px;
   transform: rotate(-2deg);
 }
+
+@keyframes results-print {
+  from {
+    clip-path: inset(var(--print-bleed) 100% var(--print-bleed) var(--print-bleed));
+  }
+  to {
+    clip-path: inset(var(--print-bleed));
+  }
+}
+
+.results .print-in {
+  animation: results-print 260ms var(--ease-carriage) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 60ms);
+}
+
+.results .print-in-short {
+  animation-duration: 180ms;
+}
+
+.results .print-in-entry {
+  animation-duration: 320ms;
+}
+
+@keyframes results-feed {
+  from {
+    transform: translateY(-24px);
+    clip-path: inset(24px -64px -64px -64px);
+  }
+  to {
+    transform: none;
+    clip-path: inset(0 -64px -64px -64px);
+  }
+}
+
+.results .feed-in {
+  animation: results-feed 420ms var(--ease-carriage) backwards;
+}
+
+@keyframes results-head {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(calc(100% - 0.6em));
+  }
+}
+
+.results .print-track {
+  position: absolute;
+  inset: 0;
+  animation: results-head 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.results .print-head {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.6em;
+  height: 1em;
+  translate: 0 -50%;
+  background: var(--ink);
+}
+
+@keyframes results-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.results .cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: results-blink 1.1s steps(1) infinite;
+}
+
+@keyframes results-check {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.results .check-draw {
+  stroke-dasharray: 24;
+  animation: results-check 240ms var(--ease-out) both;
+}
+
+@keyframes results-dots {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.results .dots {
+  animation: results-dots 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 120ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results .print-in,
+  .results .feed-in,
+  .results .check-draw,
+  .results .dots,
+  .results .cursor {
+    animation: none;
+  }
+
+  .results .print-track {
+    animation: none;
+  }
+
+  .results .key:active {
+    transform: none;
+  }
+}
