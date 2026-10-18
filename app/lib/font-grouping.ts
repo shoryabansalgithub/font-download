@@ -90,7 +90,7 @@ function tokenStartsAtBoundary(name: string, tokenLength: number): boolean {
     return /[a-z0-9]/.test(before) && /[A-Z]/.test(first);
 }
 
-interface WeightRange {
+export interface WeightRange {
     min: number;
     max: number;
     isRange: boolean;
@@ -116,7 +116,7 @@ export function parseWeightRange(weight: string | undefined): WeightRange {
     return { min: 400, max: 400, isRange: false };
 }
 
-function normalizeStyleValue(style: string | undefined): string {
+export function normalizeStyleValue(style: string | undefined): string {
     const raw = (style || '').trim().toLowerCase();
     if (!raw) return 'normal';
     if (raw.startsWith('italic')) return 'italic';
