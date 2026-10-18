@@ -494,3 +494,142 @@ select {
 .results [tabindex='-1']:focus-visible {
   outline: none;
 }
+
+
+/* micro-spec: Paper
+   role: the surface every result is printed on; form: cut edges, radius 0; material:
+   casing-white stock + speckle film; depth: contact + long cast, lit from above; behaviour:
+   feeds out of the slot once; absent: radius, border, hover */
+.results .paper {
+  position: relative;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image: var(--grain-paper);
+  background-size: 160px;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.6) inset,
+    0 2px 3px rgb(2 12 110 / 0.35),
+    0 24px 48px -16px rgb(2 12 110 / 0.55);
+}
+
+.results .tractor {
+  --hole-r: 2.6px;
+  --hole-pitch: 24px;
+  position: absolute;
+  inset-block: 0;
+  width: 28px;
+  background-color: #e3e5f9;
+  background-image:
+    radial-gradient(circle at 50% calc(var(--hole-pitch) / 2 + 0.6px), var(--room) 0 var(--hole-r), transparent calc(var(--hole-r) + 0.5px)),
+    radial-gradient(circle at 50% calc(var(--hole-pitch) / 2), rgb(2 12 110 / 0.55) 0 calc(var(--hole-r) + 0.4px), transparent calc(var(--hole-r) + 0.9px)),
+    var(--grain-paper);
+  background-size: 100% var(--hole-pitch), 100% var(--hole-pitch), 160px;
+}
+
+.results .tractor-l {
+  left: 0;
+  border-right: 1px dashed rgb(15 29 143 / 0.18);
+}
+
+.results .tractor-r {
+  right: 0;
+  border-left: 1px dashed rgb(15 29 143 / 0.18);
+}
+
+@media (max-width: 639px) {
+  .results .tractor {
+    --hole-r: 2px;
+    --hole-pitch: 20px;
+    width: 16px;
+  }
+}
+
+.results .band:nth-child(even) {
+  background-color: var(--paper-band);
+}
+
+.results .torn {
+  height: 10px;
+  background:
+    linear-gradient(135deg, var(--paper) 5px, transparent 5px) 0 0 / 10px 10px repeat-x,
+    linear-gradient(-135deg, var(--paper) 5px, transparent 5px) 0 0 / 10px 10px repeat-x;
+  filter: drop-shadow(0 3px 2px rgb(2 12 110 / 0.35));
+}
+
+.results .casing {
+  color: #0a1aa8;
+  background-color: #e4e6fb;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.6) 0%, rgb(255 255 255 / 0) 40%, rgb(80 100 220 / 0.14) 100%),
+    var(--grain),
+    var(--grain-paper);
+  background-size: 100% 100%, 120px, 160px;
+  background-blend-mode: normal, multiply, normal;
+  border-radius: 10px 10px 4px 4px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    inset 0 -2px 0 rgb(120 140 230 / 0.35),
+    inset 1px 0 0 rgb(255 255 255 / 0.5),
+    inset -1px 0 0 rgb(120 140 230 / 0.25),
+    0 2px 2px rgb(2 12 110 / 0.35),
+    0 28px 56px -18px rgb(2 12 110 / 0.6);
+}
+
+.results .seam {
+  height: 2px;
+  background: linear-gradient(180deg, rgb(40 60 170 / 0.28) 0 1px, rgb(255 255 255 / 0.85) 1px 2px);
+}
+
+.results .engraved {
+  color: #1a2ab8;
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9),
+    0 -1px 0 rgb(10 20 120 / 0.35);
+}
+
+.results .led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a2ab8;
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.4), 0 1px 0 rgb(255 255 255 / 0.8);
+}
+
+.results .led-failed {
+  background: #e0335e;
+  box-shadow: 0 0 6px 1px rgb(224 51 94 / 0.8), inset 0 1px 1px rgb(255 255 255 / 0.4);
+}
+
+.results .led-on {
+  background: #3b6bff;
+  box-shadow: 0 0 6px 1px rgb(80 130 255 / 0.9), inset 0 1px 1px rgb(255 255 255 / 0.5);
+}
+
+.results .feed-slot {
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #020c6e 0%, #061aa6 100%);
+  box-shadow:
+    inset 0 3px 6px rgb(0 4 40 / 0.8),
+    0 1px 0 rgb(190 213 255 / 0.45);
+}
+
+.results .feed-shadow {
+  background: linear-gradient(180deg, rgb(2 12 110 / 0.35), transparent);
+}
+
+.results .leader {
+  flex: 1;
+  min-width: 1rem;
+  height: 0.9em;
+  background-image: radial-gradient(circle, var(--ink-3) 0.6px, transparent 0.9px);
+  background-size: 6px 4px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  opacity: 0.7;
+}
+
+.results .double-rule {
+  border-block: 1px solid var(--ink);
+  height: 4px;
+}
