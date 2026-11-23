@@ -1,38 +1,30 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Inter, Manrope, Geist, Newsreader, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const manrope = Manrope({
+// Self-hosted (OFL, from Fontsource) rather than next/font/google: the build
+// must not depend on reaching Google, and its loader breaks on the
+// `/l/font?kit=...&skey=...` URLs Google now serves.
+const manrope = localFont({
+  src: "./fonts/manrope-latin-wght-normal.woff2",
   variable: "--font-manrope",
-  subsets: ["latin"],
+  weight: "200 800",
   display: "swap",
 });
 
-const geist = Geist({
-  variable: "--font-geist",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const newsreader = Newsreader({
+const newsreader = localFont({
+  src: "./fonts/newsreader-latin-wght-normal.woff2",
   variable: "--font-newsreader",
-  subsets: ["latin"],
-  weight: ["300", "400"],
+  weight: "200 800",
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-latin-wght-normal.woff2",
   variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: "100 800",
   display: "swap",
 });
 
@@ -68,7 +60,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${manrope.variable} ${geist.variable} ${newsreader.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${newsreader.variable} ${jetbrainsMono.variable}`}>
       <head>
         {process.env.NODE_ENV === "development" && (
           <Script
