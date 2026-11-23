@@ -8,6 +8,7 @@ import DownloadButton from './DownloadButton';
 import DownloadNote from './DownloadNote';
 import FamilyDetail from './FamilyDetail';
 import { ChevronIcon } from './Icons';
+import FreeStamp from './FreeStamp';
 import { faceStyle, Specimen, usePreview } from './Specimen';
 import { useDownload } from './useDownload';
 
@@ -123,11 +124,7 @@ function FamilyRow({
               >
                 {family.family}
               </span>
-              {family.googleFonts && (
-                <span className="stamp stamp-ink shrink-0 text-[12px]" title={`Free on Google Fonts as ${family.googleFonts}`}>
-                  Free<span className="sr-only"> on Google Fonts</span>
-                </span>
-              )}
+              {family.googleFonts && <FreeStamp family={family.family} googleFamily={family.googleFonts} />}
             </span>
             <span className="col-start-2 min-w-0 lg:row-start-2">
               <Specimen face={lead} status={status} text={text} />

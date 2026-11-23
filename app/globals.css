@@ -182,6 +182,7 @@ select {
   --ink-2: #3a4bb8; /* 6.2:1 on paper */
   --ink-3: #4a5bc4; /* 5.0:1 on paper, 4.6:1 on a band: small meta only */
   --stamp: #c4204a; /* the one warm mark: refusals and faults only */
+  --free: #1a6b34; /* stamp-pad green: 5.3:1 on paper, 4.6:1 on a band */
   --grain-paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.25 0 0 0 0 0.75 0 0 0 0.16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-carriage: cubic-bezier(0.3, 0, 0, 1);
@@ -498,9 +499,33 @@ select {
   transform: rotate(-2deg);
 }
 
-/* Good news is stamped in the sheet's own ink: red stays for refusals and faults. */
-.results .stamp-ink {
-  color: var(--ink);
+/* A real stamp-pad impression for free families; red stays for refusals and faults. */
+.results .free-stamp {
+  color: var(--free);
+  mix-blend-mode: multiply;
+  transform: rotate(var(--tilt, -2deg));
+  animation: free-stamp-land 180ms var(--ease-carriage) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 60ms + 320ms);
+}
+
+.results .free-stamp-drip {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: free-stamp-run 520ms cubic-bezier(0.55, 0, 1, 0.45) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 60ms + 560ms + var(--run, 0) * 140ms);
+}
+
+@keyframes free-stamp-land {
+  from {
+    opacity: 0;
+    transform: rotate(var(--tilt, -2deg)) scale(1.15);
+  }
+}
+
+@keyframes free-stamp-run {
+  from {
+    transform: scaleY(0);
+  }
 }
 
 @keyframes results-print {
@@ -608,6 +633,8 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   .results .print-in,
+  .results .free-stamp,
+  .results .free-stamp-drip,
   .results .feed-in,
   .results .check-draw,
   .results .dots,
