@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { formatInfo, type Face } from '../../lib/faces';
 import { previewSources } from '../../lib/font-files';
+import { NO_PREVIEW, previewTransition, type PreviewStatus } from '../../lib/preview-state';
 
-/** Blocked: the browser rejected the file. Unsupported: a format no modern browser renders. */
-export type PreviewStatus = 'loading' | 'ready' | 'blocked' | 'unsupported';
+export type { PreviewStatus };
 
 const loads = new Map<string, Promise<boolean>>();
 
@@ -42,16 +42,15 @@ function load(face: Face): Promise<boolean> {
 
 export function usePreview(face: Face | null, enabled: boolean): PreviewStatus {
   const renderable = face ? formatInfo(face.variant.format).renderable : true;
-  const [status, setStatus] = useState<PreviewStatus>(renderable ? 'loading' : 'unsupported');
+  const show = { type: 'show', key: face?.key ?? null, renderable } as const;
+  const [state, setState] = useState(() => previewTransition(NO_PREVIEW, show));
+  const current = previewTransition(state, show);
+  if (current !== state) setState(current);
   useEffect(() => {
     if (!face || !enabled || !renderable) return;
-    let live = true;
-    load(face).then((ok) => live && setStatus(ok ? 'ready' : 'blocked'));
-    return () => {
-      live = false;
-    };
+    load(face).then((ok) => setState((s) => previewTransition(s, { type: 'settled', key: face.key, ok })));
   }, [face, enabled, renderable]);
-  return status;
+  return current.status;
 }
 
 export function faceStyle(face: Face, status: PreviewStatus, weight = face.renderWeight): React.CSSProperties {
