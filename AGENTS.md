@@ -46,9 +46,12 @@ hero letter nests a `.crt-letter-fill` span for the gradient.
 
 ## Validation
 
-`npm test` covers the family grouping rules. There is no test framework: it is a
-plain `tsx` script (`scripts/test-font-grouping.ts`) that exits non-zero on
-failure, following the same convention as `build:features`.
+`npm test` runs three plain `tsx` scripts (no test framework, each exits
+non-zero on failure): the family grouping rules, an end-to-end scan of the
+fixture site in `scripts/fixtures/site` through the real extract handler, and a
+model check of the specimen preview status (`scripts/model-preview.ts`). A new
+extraction bug found on a real site belongs in that fixture site. CI runs
+`npm test`, lint, tsc and build on every PR.
 
 Validate with `npm test`, `npm run lint`, `npx tsc --noEmit` and `npm run build`,
 plus an end-to-end scan in a browser - font extraction depends on real sites' CSS,
