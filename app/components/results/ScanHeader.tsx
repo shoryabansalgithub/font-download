@@ -6,6 +6,7 @@ import type { ScanState } from '../../scan/page';
 import { facesOf, familyFacts, leadFace, type Face } from '../../lib/faces';
 import DownloadAll from './DownloadAll';
 import { ExternalIcon } from './Icons';
+import LicenceNote from './LicenceNote';
 import { useElapsed } from './ScanPending';
 import { faceStyle, usePreview } from './Specimen';
 
@@ -101,6 +102,7 @@ export default function ScanHeader({ scan, host, url }: { scan: ScanState; host:
   const [stamp] = useState(() =>
     new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   );
+  const downloadable = scan.phase === 'found' || scan.phase === 'scanning';
 
   return (
     <section className="pt-8 pb-6 sm:pt-10">
@@ -142,10 +144,13 @@ export default function ScanHeader({ scan, host, url }: { scan: ScanState; host:
         >
           <Facts scan={scan} />
         </dl>
-        {(scan.phase === 'found' || scan.phase === 'scanning') && (
-          <DownloadAll families={scan.phase === 'found' ? scan.families : []} host={host} />
-        )}
+        {downloadable && <DownloadAll families={scan.phase === 'found' ? scan.families : []} host={host} />}
       </div>
+      {downloadable && (
+        <div className="mt-6">
+          <LicenceNote />
+        </div>
+      )}
     </section>
   );
 }

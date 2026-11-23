@@ -49,7 +49,9 @@ hero letter nests a `.crt-letter-fill` span for the gradient.
 `npm test` runs three plain `tsx` scripts (no test framework, each exits
 non-zero on failure): the family grouping rules, an end-to-end scan of the
 fixture site in `scripts/fixtures/site` through the real extract handler, and a
-model check of the specimen preview status (`scripts/model-preview.ts`). A new
+model check of the specimen preview status (`scripts/model-preview.ts`), and a
+legal guard that the licence terms print wherever a Steal key does
+(`scripts/test-licence.ts`). A new
 extraction bug found on a real site belongs in that fixture site. CI runs
 `npm test`, lint, tsc and build on every PR.
 
