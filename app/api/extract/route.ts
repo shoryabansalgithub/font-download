@@ -152,72 +152,6 @@ async function fetchAndParseCSS(url: string, depth: number = 0, fetchedUrls: Set
   }
 }
 
-async function extractFontsWithPlaywright(targetUrl: string): Promise<RawFontFace[]> {
-  // Type-only import: erased at compile time, so playwright stays lazily loaded.
-  let browser: import('playwright').Browser | undefined;
-  try {
-    const { chromium } = await import('playwright');
-    browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-    });
-
-    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 45000 });
-    await page.waitForTimeout(500);
-    await page.evaluate(async () => {
-      if (document.fonts) await document.fonts.ready;
-    });
-
-    const fontFaces = await page.evaluate(() => {
-      return Array.from(document.fonts).map((fontFace) => ({
-        family: fontFace.family,
-        style: fontFace.style,
-        weight: fontFace.weight,
-        unicodeRange: fontFace.unicodeRange,
-        status: fontFace.status,
-        src: (fontFace as unknown as { src?: string }).src || ''
-      }));
-    });
-
-    const fonts: RawFontFace[] = [];
-    for (const face of fontFaces) {
-      if (face.status !== 'loaded' && face.status !== 'loading') continue;
-      if (!face.src) continue;
-
-      const bestSource = pickBestSource(face.src, targetUrl);
-      if (!bestSource) continue;
-
-      const family = normalizeFamilyName(face.family || 'Unknown Font');
-      const fileName = bestSource.url.startsWith('data:')
-        ? 'embedded-font'
-        : bestSource.url.split('/').pop()?.split('?')[0] || '';
-
-      fonts.push({
-        name: fileName || `${family}-${bestSource.format}`,
-        family,
-        format: bestSource.format,
-        url: bestSource.url,
-        weight: face.weight || '400',
-        style: face.style || 'normal',
-        unicodeRange: face.unicodeRange,
-        referer: targetUrl
-      });
-    }
-
-    return fonts;
-  } catch {
-    return [];
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch {
-        // ignore
-      }
-    }
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json();
@@ -229,8 +163,6 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
     }
-
-    const realFonts = await extractFontsWithPlaywright(targetUrl.href);
 
     const response = await fetch(targetUrl.href, {
       headers: {
@@ -309,7 +241,7 @@ export async function POST(request: NextRequest) {
     // Collapse every discovered face into one entry per family: de-duplicates
     // repeats from multiple stylesheets, @import chains and preload hints, and
     // folds a family's weight/style fan-out into a single grouped result.
-    const families = groupFontFaces([...realFonts, ...allFonts]);
+    const families = groupFontFaces(allFonts);
     const totalVariants = families.reduce((sum, family) => sum + family.variants.length, 0);
 
     return NextResponse.json({
