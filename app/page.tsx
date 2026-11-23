@@ -4,16 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import HeroSection from './components/HeroSection';
 
+/** Long enough for the button's loading state to be seen before the page changes. */
+const KEY_PRESS_HOLD_MS = 400;
+
 export default function Home() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleSearch = (targetUrl: string) => {
     setLoading(true);
-    // Add small delay to show the nice loading state of the button before navigation
     setTimeout(() => {
       router.push(`/scan?url=${encodeURIComponent(targetUrl)}`);
-    }, 400);
+    }, KEY_PRESS_HOLD_MS);
   };
 
   // The landing page is the machine and nothing else. The gradient matches the

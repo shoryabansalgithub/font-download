@@ -6,12 +6,9 @@ import {
   type RawFontFace,
 } from '../../lib/font-grouping';
 
-// More robust regex to extract @font-face blocks
 const fontFaceRegex = /@font-face\s*\{([\s\S]*?)\}/gi;
-// Regex to extract @import rules
 const importRegex = /@import\s+(?:url\(['"]?|['"])([^'")]+\.css[^'")]*)(?:['"]?\)['"]?|['"])\s*[^;]*;/gi;
 
-// Regex to extract properties from @font-face
 const fontFamilyRegex = /font-family\s*:\s*['"]?([^'";]+)['"]?/gi;
 const srcRegex = /(?:^|[;{\s])src\s*:\s*([^;]+)/gi;
 const weightRegex = /font-weight\s*:\s*([^;]+)/gi;
@@ -86,14 +83,12 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace
   const fonts: RawFontFace[] = [];
   const imports: string[] = [];
 
-  // Extract @import rules
   let importMatch;
   const importRegexCopy = new RegExp(importRegex.source, 'gi');
   while ((importMatch = importRegexCopy.exec(css)) !== null) {
     imports.push(resolveUrl(baseUrl, importMatch[1]));
   }
 
-  // Extract @font-face blocks
   let blockMatch;
   const fontFaceRegexCopy = new RegExp(fontFaceRegex.source, 'gi');
   while ((blockMatch = fontFaceRegexCopy.exec(css)) !== null) {
@@ -179,12 +174,10 @@ export async function POST(request: NextRequest) {
     const allFonts: RawFontFace[] = [];
     const fetchedCssUrls = new Set<string>();
 
-    // 1. Inline styles
     const inlineStyleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
     let styleMatch;
     while ((styleMatch = inlineStyleRegex.exec(html)) !== null) {
       const { fonts, imports } = extractFontsFromCSS(styleMatch[1], targetUrl.href);
-      // Attach referer to inline fonts
       allFonts.push(...fonts.map(f => ({ ...f, referer: targetUrl.href })));
 
       const importFonts = await Promise.all(imports.map(i => fetchAndParseCSS(i, 0, fetchedCssUrls)));
@@ -192,7 +185,6 @@ export async function POST(request: NextRequest) {
       allFonts.push(...importFontsWithReferer);
     }
 
-    // 2. Linked stylesheets and Preloaded fonts
     const linkTagRegex = /<link[^>]+>/gi;
     const relRegex = /rel=["']?([^"'\s]+)["']?/i;
     const hrefRegex = /href=["']?([^"'\s>]+)["']?/i;
@@ -232,15 +224,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Process all linked CSS files
     const linkedFonts = await Promise.all(initialCssUrls.map(u => fetchAndParseCSS(u, 0, fetchedCssUrls)));
-    // Attach referer to linked fonts
     const fontsWithReferer = linkedFonts.flat().map(font => ({ ...font, referer: targetUrl.href }));
     allFonts.push(...fontsWithReferer);
 
-    // Collapse every discovered face into one entry per family: de-duplicates
-    // repeats from multiple stylesheets, @import chains and preload hints, and
-    // folds a family's weight/style fan-out into a single grouped result.
     const families = groupFontFaces(allFonts);
     const totalVariants = families.reduce((sum, family) => sum + family.variants.length, 0);
 
