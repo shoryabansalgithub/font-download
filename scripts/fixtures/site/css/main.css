@@ -1,0 +1,19 @@
+@import url("/css/subsets.css");
+
+/* Legacy IE pattern: an EOT-only src, then the real list. Browsers use the last. */
+@font-face {
+  font-family: "Legacy Serif";
+  src: url("/fonts/legacy.eot");
+  src: url("/fonts/legacy.eot?#iefix") format("embedded-opentype"),
+       url("/fonts/legacy.woff2") format("woff2"),
+       url("/fonts/legacy.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* The preloaded file, declared for real: the declaration must win over the filename guess. */
+@font-face {
+  font-family: "Sohne";
+  src: url("/fonts/Sohne-Buch.woff2") format("woff2");
+  font-weight: 450;
+}
