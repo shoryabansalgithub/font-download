@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { FontAlternative, FontFamily } from '../../types';
 import { formatInfo, rangeText, type Face } from '../../lib/faces';
 import { downloadOf, faceStem, filesOf } from '../../lib/font-files';
+import { googleSpecimenUrl } from '../../lib/google-fonts';
 import DownloadButton from './DownloadButton';
 import DownloadNote from './DownloadNote';
 import { ExternalIcon, Spinner, SimilarIcon } from './Icons';
@@ -86,6 +87,33 @@ type AltState =
              hover; answers print as leader lines: family, dots, similarity, an exit glyph
   behaviour: loading keeps the line's width with a spinner; a failed match offers to try again
 */
+/*
+  micro-spec: Free on Google Fonts (replaces lookalikes when the font is itself free)
+  role:      the font needs no stand-in: point at its own free source
+  form:      the lookalike answer's shape: a 12px caps heading, then one leader line, family,
+             dots, "open licence", an exit glyph
+  absent:    the lookalike search, which would download and measure a file to suggest the font
+             the visitor already has
+*/
+function FreeSource({ family }: { family: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-[12px] tracking-[0.08em] text-ink-3 uppercase">Free on Google Fonts</h3>
+      <a
+        href={googleSpecimenUrl(family)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-baseline gap-2 rounded-[3px] py-1 text-[12px] text-ink pointer-coarse:py-3 sm:max-w-[calc(50%-1rem)]"
+      >
+        <span className="truncate underline decoration-transparent underline-offset-4 transition-[text-decoration-color] duration-120 ease-out group-hover:decoration-current">{family}</span>
+        <span aria-hidden className="leader" />
+        <span className="text-ink-2">open licence</span>
+        <ExternalIcon className="size-3 shrink-0 self-center text-ink-3 group-hover:text-ink" />
+      </a>
+    </div>
+  );
+}
+
 function Lookalikes({ family, face }: { family: FontFamily; face: Face }) {
   const [alt, setAlt] = useState<AltState>({ kind: 'idle' });
 
@@ -200,7 +228,7 @@ export default function FamilyDetail({
             </span>
           ))}
         </p>
-        <Lookalikes family={family} face={lead} />
+        {family.googleFonts ? <FreeSource family={family.googleFonts} /> : <Lookalikes family={family} face={lead} />}
       </div>
     </div>
   );

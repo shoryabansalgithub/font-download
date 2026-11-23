@@ -17,3 +17,10 @@
   src: url("/fonts/Sohne-Buch.woff2") format("woff2");
   font-weight: 450;
 }
+
+/* A free family under the alias rsms.me and linear.app serve it as. */
+@font-face {
+  font-family: "Inter Variable";
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+}

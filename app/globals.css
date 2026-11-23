@@ -498,6 +498,11 @@ select {
   transform: rotate(-2deg);
 }
 
+/* Good news is stamped in the sheet's own ink: red stays for refusals and faults. */
+.results .stamp-ink {
+  color: var(--ink);
+}
+
 @keyframes results-print {
   from {
     clip-path: inset(var(--print-bleed) 100% var(--print-bleed) var(--print-bleed));

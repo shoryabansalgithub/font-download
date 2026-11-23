@@ -46,14 +46,18 @@ hero letter nests a `.crt-letter-fill` span for the gradient.
 
 ## Validation
 
-`npm test` runs three plain `tsx` scripts (no test framework, each exits
-non-zero on failure): the family grouping rules, an end-to-end scan of the
-fixture site in `scripts/fixtures/site` through the real extract handler, and a
-model check of the specimen preview status (`scripts/model-preview.ts`), and a
-legal guard that the licence terms print wherever a Steal key does
-(`scripts/test-licence.ts`). A new
-extraction bug found on a real site belongs in that fixture site. CI runs
-`npm test`, lint, tsc and build on every PR.
+`npm test` runs plain `tsx` scripts (no test framework; each exits non-zero on
+failure), and CI runs it with lint, tsc and build on every push and PR:
+
+- `test-font-grouping.ts`: the family grouping rules.
+- `test-google-fonts.ts`: the Google Fonts name match behind the FREE stamp. It
+  must never stamp a paid font.
+- `e2e-extract.ts`: scans the fixture site in `scripts/fixtures/site` through
+  the real extract handler. A new extraction bug found on a real site belongs
+  in that fixture.
+- `model-preview.ts`: model check of the specimen preview status.
+- `test-licence.ts`: legal guard that the licence terms print wherever a Steal
+  key does.
 
 Validate with `npm test`, `npm run lint`, `npx tsc --noEmit` and `npm run build`,
 plus an end-to-end scan in a browser - font extraction depends on real sites' CSS,

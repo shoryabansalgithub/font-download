@@ -31,6 +31,8 @@ export interface FontFamily {
     formats: string[];
     /** True when any variant is a variable font spanning a weight range. */
     isVariable: boolean;
+    /** Set when this family is, by exact name, a family on Google Fonts: free under an open licence. */
+    googleFonts?: string;
     alternatives?: FontAlternative[];
 }
 

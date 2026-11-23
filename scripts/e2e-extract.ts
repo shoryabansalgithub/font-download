@@ -43,7 +43,16 @@ async function main() {
     const byName = new Map(body.families.map((family) => [family.family, family]));
 
     console.log('\nEvery family on the fixture site is found once');
-    check('families', body.families.map((f) => f.family), ['Freight Display', 'Legacy Serif', 'Sohne', 'TwitterChirp']);
+    check('families', body.families.map((f) => f.family), ['Freight Display', 'Inter Variable', 'Legacy Serif', 'Sohne', 'TwitterChirp']);
+
+    console.log('\nOnly the family that is on Google Fonts is marked free');
+    check('free families', body.families.map((f) => [f.family, f.googleFonts ?? null]), [
+        ['Freight Display', null],
+        ['Inter Variable', 'Inter'],
+        ['Legacy Serif', null],
+        ['Sohne', null],
+        ['TwitterChirp', null],
+    ]);
 
     console.log('\nAn absolute URL behind a leading slash is used as written (bbc.com, f0f5aff)');
     check('Freight Display url', byName.get('Freight Display')?.representative.url,

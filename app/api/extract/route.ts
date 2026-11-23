@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { findGoogleFamily, indexGoogleFamilies, type GoogleFamilyIndex } from '../../lib/google-fonts';
 import {
   groupFontFaces,
   inferDescriptorsFromFileName,
@@ -124,6 +127,19 @@ function extractFontsFromCSS(css: string, baseUrl: string): { fonts: RawFontFace
   return { fonts, imports };
 }
 
+let googleIndex: Promise<GoogleFamilyIndex> | null = null;
+
+function googleFamilies(): Promise<GoogleFamilyIndex> {
+  googleIndex ??= fs
+    .readFile(path.join(process.cwd(), 'public', 'data', 'font-features.json'), 'utf-8')
+    .then((text) => indexGoogleFamilies((JSON.parse(text) as { fonts: { family: string }[] }).fonts.map((f) => f.family)))
+    .catch((error) => {
+      console.error('Google Fonts list unavailable, no family is marked free:', error);
+      return new Map();
+    });
+  return googleIndex;
+}
+
 const MAX_IMPORT_DEPTH = 3;
 
 async function fetchAndParseCSS(url: string, depth: number = 0, fetchedUrls: Set<string> = new Set()): Promise<RawFontFace[]> {
@@ -228,7 +244,11 @@ export async function POST(request: NextRequest) {
     const fontsWithReferer = linkedFonts.flat().map(font => ({ ...font, referer: targetUrl.href }));
     allFonts.push(...fontsWithReferer);
 
-    const families = groupFontFaces(allFonts);
+    const google = await googleFamilies();
+    const families = groupFontFaces(allFonts).map((family) => {
+      const googleFonts = findGoogleFamily(google, family.family);
+      return googleFonts ? { ...family, googleFonts } : family;
+    });
     const totalVariants = families.reduce((sum, family) => sum + family.variants.length, 0);
 
     return NextResponse.json({

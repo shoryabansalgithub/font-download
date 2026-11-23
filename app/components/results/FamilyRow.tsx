@@ -115,12 +115,19 @@ function FamilyRow({
                 className={`size-3 transition-transform duration-160 ease-out motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
               />
             </span>
-            <span
-              title={family.family}
-              className="text-[20px] leading-[1.25] text-ink [overflow-wrap:break-word] sm:text-[24px] lg:truncate"
-              style={faceStyle(lead, status)}
-            >
-              {family.family}
+            <span className="flex min-w-0 items-baseline gap-3">
+              <span
+                title={family.family}
+                className="min-w-0 text-[20px] leading-[1.25] text-ink [overflow-wrap:break-word] sm:text-[24px] lg:truncate"
+                style={faceStyle(lead, status)}
+              >
+                {family.family}
+              </span>
+              {family.googleFonts && (
+                <span className="stamp stamp-ink shrink-0 text-[12px]" title={`Free on Google Fonts as ${family.googleFonts}`}>
+                  Free<span className="sr-only"> on Google Fonts</span>
+                </span>
+              )}
             </span>
             <span className="col-start-2 min-w-0 lg:row-start-2">
               <Specimen face={lead} status={status} text={text} />
