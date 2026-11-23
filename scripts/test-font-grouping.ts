@@ -13,23 +13,7 @@ import {
     stripRedundantDescriptorSuffix,
     type RawFontFace,
 } from '../app/lib/font-grouping';
-
-let passed = 0;
-const failures: string[] = [];
-
-function check(label: string, actual: unknown, expected: unknown) {
-    const actualJson = JSON.stringify(actual);
-    const expectedJson = JSON.stringify(expected);
-    if (actualJson === expectedJson) {
-        passed++;
-        console.log(`  pass  ${label}`);
-    } else {
-        failures.push(`${label}\n    expected ${expectedJson}\n    actual   ${actualJson}`);
-        console.log(`  FAIL  ${label}`);
-        console.log(`        expected ${expectedJson}`);
-        console.log(`        actual   ${actualJson}`);
-    }
-}
+import { check, finish } from './check';
 
 function face(
     family: string,
@@ -284,7 +268,4 @@ console.log('\nFiles that cover the whole range stay separate faces');
 console.log('\nNo faces means no families, which drives the empty state');
 check('empty', groupFontFaces([]).length, 0);
 
-console.log(`\n${passed} passed, ${failures.length} failed\n`);
-if (failures.length > 0) {
-    process.exit(1);
-}
+finish();

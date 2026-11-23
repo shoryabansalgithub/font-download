@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx scripts/test-font-grouping.ts",
+    "test": "npx tsx scripts/test-font-grouping.ts && npx tsx scripts/e2e-extract.ts",
     "build:features": "npx tsx scripts/build-font-features.ts",
     "eval:match": "npx tsx scripts/eval-match.ts"
   },
