@@ -9,6 +9,7 @@ import ScanHeader from '../components/results/ScanHeader';
 import FamilyList from '../components/results/FamilyList';
 import ScanPending from '../components/results/ScanPending';
 import ScanOutcome from '../components/results/ScanOutcome';
+import ReportFooter from '../components/results/ReportFooter';
 
 export type ScanState =
   | { phase: 'scanning'; startedAt: number }
@@ -121,12 +122,7 @@ function ScanScreen() {
                     secondary={{ label: 'SCAN ANOTHER SITE', onClick: goHome }}
                   />
                 )}
-                <footer className="mt-8 pb-6">
-                  <div aria-hidden className="double-rule" />
-                  <p className="mt-3 text-center text-[12px] tracking-[0.08em] text-ink-3 uppercase">
-                    {scan.phase === 'scanning' ? 'Printing' : 'End of report'} · {host}
-                  </p>
-                </footer>
+                <ReportFooter label={`${scan.phase === 'scanning' ? 'Printing' : 'End of report'} · ${host}`} />
               </div>
             </div>
             <div aria-hidden className="torn" />
