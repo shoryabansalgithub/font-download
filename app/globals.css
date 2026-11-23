@@ -508,23 +508,10 @@ select {
   animation-delay: calc(min(var(--i, 0), 12) * 60ms + 320ms);
 }
 
-.results .free-stamp-drip {
-  transform-box: fill-box;
-  transform-origin: top center;
-  animation: free-stamp-run 520ms cubic-bezier(0.55, 0, 1, 0.45) backwards;
-  animation-delay: calc(min(var(--i, 0), 12) * 60ms + 560ms + var(--run, 0) * 140ms);
-}
-
 @keyframes free-stamp-land {
   from {
     opacity: 0;
     transform: rotate(var(--tilt, -2deg)) scale(1.15);
-  }
-}
-
-@keyframes free-stamp-run {
-  from {
-    transform: scaleY(0);
   }
 }
 
@@ -634,7 +621,6 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .results .print-in,
   .results .free-stamp,
-  .results .free-stamp-drip,
   .results .feed-in,
   .results .check-draw,
   .results .dots,
